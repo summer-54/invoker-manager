@@ -1,0 +1,16 @@
+[package]
+name = "invoker-manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "*", features = ["full"] }
+# tokio-websockets = { version = "0.12.0", features = ["server", "openssl", "native-tls"] }
+tokio-tungstenite = { version = "*" }
+uuid = { version = "*" }
+tokio-native-tls = { version = "*" }
+openssl = { version = "*" }
+rand = { version = "*" }
+futures-util = { version = "*" }
+env_logger = { version = "*" }
+log = { version = "*" }
