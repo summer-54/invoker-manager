@@ -1,9 +1,9 @@
-use futures_util::StreamExt;
-use tokio_tungstenite::tungstenite::Error;
+use futures_util::{SinkExt, StreamExt};
+use tokio_tungstenite::tungstenite::{Error, Message};
 use uuid::Uuid;
 use std::{io, str};
-use super::WSReader;
-use crate::server::{verdict::Verdict, submission::Submission};
+use super::{WSReader, WSWriter};
+use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 
 pub struct Gateway;
@@ -30,6 +30,11 @@ impl Gateway { // wrong protocol
         let message = InputMessage::parse(data)?;
         Ok(message)
     }
+
+    pub async fn send_message(socket: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
+        socket.send(Message::binary(message.parse_to())).await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -42,42 +47,50 @@ pub enum InputMessage {
 pub enum OutputMessage {
     TestVerdict {
         submission_uuid: Uuid,
-        test_number: u16,
-        verdict: Verdict,
+        test: u16,
+        result: TestResult,
+        data: Vec<u8>,
     },
     SubmissionVerdict {
         submission_uuid: Uuid,
-        points: u8,
-        vetdict: Verdict,
-        test_results: Vec<TestResult>,
+        verdict: Verdict,
+        tests_result: Vec<TestResult>,
+        message: Result<(u8, Vec<u8>), String>,
     }
 }
 
 impl InputMessage {
     fn parse(bytes: Vec<u8>) -> Result<Self, Error> {
-        let (message_type, arguments, data) = Gateway::first_line_of_bytes(bytes);
-        match message_type.as_str() {
-            "TOKEN" => {
-                Ok(InputMessage::Token{
-                    uuid: Uuid::from_bytes(data.try_into().unwrap_or(rand::random::<[u8; 16]>())),
-                })
+        todo!();
+    }
+}
+
+impl OutputMessage {
+    fn parse_to(&self) -> Vec<u8> {
+        match self {
+            OutputMessage::TestVerdict { submission_uuid, test, result, data } => {
+                let mut result: Vec<u8> = format!("TYPE TEST\nSUBMISSION {}\nTEST {}\nVERDICT {}\nDATA\n", submission_uuid, test, result.parse_to()).bytes().collect();
+                result.append(&mut data.clone());
+                result
             },
-            "VERDICT" => {
-                Ok(InputMessage::Verdict {
-                    verdict: Verdict::parse(&arguments),
-                    data,
-                })
-            },
-            "TEST" => {
-                let test: u32 = arguments.parse().unwrap_or(0);
-                let (_, verdict, data) = Gateway::first_line_of_bytes(data);
-                Ok(InputMessage::TestVerdict {
-                    verdict: Verdict::parse(&verdict),
-                    test,
-                    data,
-                })
-            },
-            &_ => Err(Error::Io(io::Error::new(io::ErrorKind::InvalidData, "Can't parse message")))
+            OutputMessage::SubmissionVerdict { submission_uuid, verdict, tests_result, message } => {
+                match message {
+                    Ok((sum, groups)) => {
+                        let mut result: Vec<u8> = format!("TYPE VERDICT\nSUBMISSION {}\nVERDICT {}\nSUM {}\nGROUPS {}\nDATA\n", submission_uuid, verdict.parse_to(), sum, groups.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(" ")).bytes().collect();
+                        for i in tests_result {
+                            result.append(&mut format!("{}\n", i.parse_to()).bytes().collect::<Vec<u8>>());
+                        }
+                        result
+                    },
+                    Err(message) => {
+                        let mut result: Vec<u8> = format!("TYPE VERDICT\nSUBMISSION {}\nVERDICT {}\nMESSAGE {}\nDATA\n", submission_uuid, verdict.parse_to(), message).bytes().collect();
+                        for i in tests_result {
+                            result.append(&mut format!("{}\n", i.parse_to()).bytes().collect::<Vec<u8>>());
+                        }
+                        result
+                    }
+                }
+            }
         }
     }
 }

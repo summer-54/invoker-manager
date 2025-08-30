@@ -1,13 +1,19 @@
-use futures_util::StreamExt;
-use tokio_tungstenite::tungstenite::Error;
+use futures_util::{SinkExt, StreamExt};
+use tokio::sync::Mutex;
+use tokio_tungstenite::tungstenite::{Error, Message};
 use uuid::Uuid;
-use std::{io, str};
-use super::WSReader;
-use crate::server::verdict::Verdict;
+use std::{collections::HashMap, io, str::{self, FromStr}, sync::Arc};
+use super::{Invoker, WSReader, WSWriter};
+use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 pub struct Gateway;
 
 impl Gateway {
+
+    pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
+        writer.send(Message::binary(message.parse_to())).await?;
+        Ok(())
+    }
 
     async fn read_data_from(socket: &mut WSReader) -> Result<Vec<u8>, Error> {
         let Some(bin) = socket.next().await else {
@@ -16,37 +22,66 @@ impl Gateway {
         Ok(bin?.into_data().to_vec())
     }
 
-    fn first_line_of_bytes(data: Vec<u8>) -> (String, String, Vec<u8>) {
+    fn first_line_of_bytes(data: &Vec<u8>) -> (String, String, &[u8]) {
         let mut endl = [0; 1];
         '\n'.encode_utf8(&mut endl);
         let (first_line, data) = data.split_at(data.iter().position(|&x| x == endl[0]).unwrap_or(data.len()));
         let first_line = str::from_utf8(first_line).unwrap_or("UNDEFINED").to_string();
         let (message_type, first_line_arguments) = first_line.split_at(first_line.find(' ').unwrap_or(first_line.len()));
-        (message_type.to_string(), first_line_arguments.to_string(), data.to_vec())
+        (message_type.to_string(), first_line_arguments.to_string(), data)
     }
 
-    pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, Error> {
-        let data = Self::read_data_from(socket).await?;
-        let message = InputMessage::parse(data)?;
+    pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, String> {
+        let Ok(data) = Self::read_data_from(socket).await else {
+            log::error!("Couldn't read data from socket");
+
+            return Err("Couldn't read data from socket".to_string());
+        };
+        let message = InputMessage::parse_from(data)?;
         Ok(message)
+    }
+    pub fn to_vec_u8(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+        let Ok(string) = String::from_utf8(bytes) else {
+            log::error!("Bytes couldn't be parsed to string");
+
+            return Err("Bytes couldn't be parsed to string".to_string());
+        };
+        Ok(string.lines().map(|line| {u8::from_str(line).unwrap_or(0)}).collect())
+    }
+
+    pub fn parse_headers(bytes: Vec<u8>) -> (HashMap<String, String>, Vec<u8>) {
+        let mut data = bytes;
+        let mut headers = HashMap::new();
+        loop {
+            let (key, val, bytes) = Self::first_line_of_bytes(&data);
+            data = bytes.to_vec();
+            if key == "DATA" {
+                break;
+            } else {
+                headers.insert(key, val);
+            }
+        }
+        (headers, data)
     }
 }
 
+#[derive(Debug)]
 pub enum InputMessage {
     Token {
         uuid: Uuid,
     },
     Verdict {
         verdict: Verdict,
-        data: Vec<u8>,
+        message: Result<(u8, Vec<u8>), String>,
     },
     TestVerdict {
-        verdict: Verdict,
+        result: TestResult,
         test: u16,
         data: Vec<u8>,
     },
     Exited { // don't parsed
         exit_code: String,
+        exit_data: Vec<u8>,
     },
     Error { // don't parsed
         message: String,
@@ -56,31 +91,101 @@ pub enum InputMessage {
     },
 }
 
+pub enum OutputMessage {
+    TestSubmission {
+        submission: Submission,
+    },
+    StopTesting,
+    CloseInvoker,
+}
+
 impl InputMessage {
-    fn parse(bytes: Vec<u8>) -> Result<Self, Error> {
-        let (message_type, arguments, data) = Gateway::first_line_of_bytes(bytes);
+    fn parse_from(bytes: Vec<u8>) -> Result<Self, String> {
+        let (headers, data) = Gateway::parse_headers(bytes);
+        let Some(message_type) = headers.get("TYPE") else {
+            log::error!("Message doesn't contain TYPE header");
+
+            return Err("Message doesn't contain TYPE header".to_string());
+        };
         match message_type.as_str() {
             "TOKEN" => {
+                let uuid = Uuid::from_str(headers.get("TOKEN").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
                 Ok(InputMessage::Token{
-                    uuid: Uuid::from_bytes(data.try_into().unwrap_or(rand::random::<[u8; 16]>())),
+                    uuid,
                 })
             },
             "VERDICT" => {
-                Ok(InputMessage::Verdict {
-                    verdict: Verdict::parse(&arguments),
-                    data,
-                })
+                let verdict = Verdict::parse(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
+                if let Verdict::OK = verdict {
+                    let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
+                    let points = headers.get("GROUPS").cloned().unwrap_or("0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
+                    Ok(InputMessage::Verdict {
+                        verdict,
+                        message: Ok((sum, points)),
+                    })
+                } else {
+                    let message = headers.get("MESSAGE").cloned().unwrap_or("Undefined error message".to_string());
+                    Ok(InputMessage::Verdict {
+                        verdict,
+                        message: Err(message),
+                    })
+                }
             },
             "TEST" => {
-                let test: u32 = arguments.parse().unwrap_or(0);
-                let (_, verdict, data) = Gateway::first_line_of_bytes(data);
+                let test: u16 = headers.get("TEST").map_or(1, |v| u16::from_str(v).unwrap_or(1));
+                let verdict = Verdict::parse(&headers.get("VERDICT").cloned().unwrap_or("UV".to_string()));
+                let time: f64 = headers.get("TIME").map_or(0.0, |v| f64::from_str(v).unwrap_or(0.0));
+                let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
                 Ok(InputMessage::TestVerdict {
-                    verdict: Verdict::parse(&verdict),
+                    result: TestResult {
+                        verdict,
+                        time,
+                        memory,
+                    },
                     test,
                     data,
                 })
             },
-            &_ => Err(Error::Io(io::Error::new(io::ErrorKind::InvalidData, "Can't parse message")))
+            "EXITED" => {
+                let exit_code = headers.get("EXITED").cloned().unwrap_or("0".to_string());
+                Ok(InputMessage::Exited{
+                    exit_code,
+                    exit_data: data,
+                })
+            },
+            "ERROR" => {
+                let error = headers.get("ERROR").cloned().unwrap_or("".to_string());
+                Ok(InputMessage::Error{
+                    message: error
+                })
+            },
+            "OPERROR" => {
+                let operror = headers.get("OPERROR").cloned().unwrap_or("".to_string());
+                Ok(InputMessage::Error{
+                    message: operror
+                })
+            },
+            &_ => Err("Can't parse message".to_string())
+        }
+    }
+}
+
+impl OutputMessage {
+    fn parse_to(&self) -> Vec<u8> {
+        match self {
+            Self::TestSubmission { submission } => {
+                let mut result = "TYPE START\nDATA\n".as_bytes().to_vec();
+                result.append(&mut submission.data.clone());
+                result
+            }
+            Self::StopTesting => {
+                let result = "TYPE STOP\n".as_bytes().to_vec();
+                result
+            }
+            Self::CloseInvoker => {
+                let result = "TYPE CLOSE\n".as_bytes().to_vec();
+                result
+            }
         }
     }
 }

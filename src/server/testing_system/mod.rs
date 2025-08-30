@@ -3,10 +3,11 @@ pub mod gateway;
 use std::sync::Arc;
 
 use futures_util::{stream::{SplitSink, SplitStream}, StreamExt};
-use gateway::{Gateway, InputMessage};
+use gateway::{Gateway, InputMessage, OutputMessage};
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::{client::IntoClientRequest, http::HeaderValue, Error}, MaybeTlsStream, WebSocketStream};
-use super::{Server};
+use uuid::Uuid;
+use super::{verdict::{TestResult, Verdict}, Server};
 
 
 pub type WSReader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
@@ -48,5 +49,21 @@ impl TestingSystem {
                 Err(err) => log::error!("testing_system_side: Recieved a unparseable message | message = {:?}", err),
             }
         }
+    }
+    pub async fn send_submission_verdict(testing_system: Arc<Mutex<Self>>, verdict: Verdict, submission_uuid: Uuid, tests_result: Vec<TestResult>, message: Result<(u8, Vec<u8>), String>) {
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer = writer.lock().await;
+        Gateway::send_message(&mut writer, OutputMessage::SubmissionVerdict{
+            verdict, submission_uuid, tests_result, message,
+        }).await;
+        log::info!("testing_system: SubmissionVerdict message sent")
+    }
+    pub async fn send_test_verdict(testing_system: Arc<Mutex<Self>>, result: TestResult, test: u16, data: Vec<u8>, submission_uuid: Uuid) {
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer = writer.lock().await;
+        Gateway::send_message(&mut writer, OutputMessage::TestVerdict{
+            result, submission_uuid, test, data
+        }).await;
+        log::info!("testing_system: TestVerdict message sent")
     }
 }

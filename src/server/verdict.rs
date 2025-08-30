@@ -1,7 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TestResult {
-    verdict: Verdict,
+    pub verdict: Verdict,
+    pub time: f64,
+    pub memory: u32,
 }
+
+#[derive(Debug, Clone)]
 pub enum Verdict {
     OK,
     WA,
@@ -10,6 +14,7 @@ pub enum Verdict {
     ML,
     TE,
     CE,
+    SL,
     UV,
 }
 
@@ -23,7 +28,28 @@ impl Verdict {
             "TL" => Self::TL,
             "RE" => Self::RE,
             "ML" => Self::ML,
+            "SL" => Self::SL,
                _ => Self::UV,
         }
+    }
+
+    pub fn parse_to(&self) -> String {
+        match self {
+            Self::OK => "OK",
+            Self::UV => "UV",
+            Self::SL => "SL",
+            Self::WA => "WA",
+            Self::TL => "TL",
+            Self::RE => "RE",
+            Self::ML => "ML",
+            Self::TE => "TE",
+            Self::CE => "CE",
+        }.to_string()
+    }
+}
+
+impl TestResult {
+    pub fn parse_to(&self) -> String {
+        format!("{} {} {}", self.verdict.parse_to(), self.time, self.memory).to_string()
     }
 }

@@ -3,13 +3,14 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct Submission {
     pub uuid: Uuid,
-    data: Vec<u8>,
+    pub tests_count: u16,
+    pub data: Vec<u8>,
 }
 
 impl Submission {
-    pub fn new(uuid: Uuid, data: Vec<u8>) -> Self {
+    pub fn new(uuid: Uuid, data: Vec<u8>, tests_count: u16) -> Self {
         Self {
-            uuid, data,
+            uuid, data, tests_count,
         }
     }
 }

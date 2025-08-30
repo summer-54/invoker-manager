@@ -1,12 +1,12 @@
 pub mod gateway;
 
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard};
 
 use futures_util::{stream::{SplitSink, SplitStream}, StreamExt};
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
-use gateway::{Gateway, InputMessage};
+use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
 
 pub type WSReader = SplitStream<WebSocketStream<TcpStream>>;
@@ -28,24 +28,43 @@ impl Invoker {
             submission_uuid: None,
         }
     }
-    pub async fn take_submission(invoker: Arc<Mutex<Invoker>>, server: Arc<Mutex<Server>>) -> Result<Option<Uuid>, String> {
-        let invoker_uuid = invoker.lock().await.uuid;
-        if let Some(uuid) = invoker.lock().await.submission_uuid {
-            log::error!("invoker can't take submission if already taken one | uuid: {} | submission_uuid : {} ", invoker_uuid, uuid);
-            return Err("Can't take submission".to_string())
-        }
-        let invoker_locked = invoker.lock().await;
-        let submissions = server.lock().await.submissions.clone();
-        if let Some(submission) =  submissions.lock().await.pop_front() {
-            let submission_uuid = submission.uuid;
-            
-            Self::run_submission(invoker.clone(), submission);
 
+    pub async fn run_submission(invoker: Arc<Mutex<Invoker>>, submission: Submission) {
+        invoker.lock().await.submission_uuid = Some(submission.uuid);
+        tokio::spawn(async move {
+            let writer = invoker.lock().await.writer.clone();
+            let mut writer_locked = writer.lock().await;
+            Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{submission}).await;
+        });
+    }
+
+    pub async fn take_submission(invoker: Arc<Mutex<Invoker>>, server: Arc<Mutex<Server>>) -> Result<Option<Uuid>, String> {
+        let invoker_locked = invoker.lock().await;
+        if let None = invoker_locked.submission_uuid {
+            log::error!("Invoker already has submission and can't take new one | invoker_uuid = {}", invoker_locked.uuid);
+            return Err("Invoker already has submission and can't take new one.".to_string());
+        }
+        let submission = {
+            let submissions_pool_receiver_cloned = server.lock().await.submissions_pool_receiver.clone();
+            let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
+            submissions_pool_receiver.recv().await
+        };
+        if let Some(submission) = submission {
+            let submission_uuid = submission.uuid;
+            log::info!("Invoker takes new submission | submission_uuid = {}", submission_uuid);
+            Self::run_submission(invoker.clone(), submission).await;
+            drop(invoker_locked);
             Ok(Some(submission_uuid))
         } else {
+            drop(invoker_locked);
             Ok(None)
         }
     }
+
+    pub async fn finish_current_submission(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) {
+        invoker.lock().await.submission_uuid = None;
+    }
+
     pub async fn message_handler(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
         let reader = invoker.lock().await.reader.clone();
         let invoker_uuid = invoker.lock().await.uuid;
@@ -54,22 +73,88 @@ impl Invoker {
             let message = match Gateway::read_message_from(&mut reader_locked).await {
                 Ok(message) => message,
                 Err(err) => {
-                    log::info!("invoker_side: Recieved a message | error = {:?}", err);
+                    log::info!("invoker_side: Recieved a message | error = {:?} | invoker_uuid = {:?}", err, invoker_uuid);
                 return Err("Reading error".to_string());
                 }
             };
+            log::info!("invoker_handler: Recieeved message from invoker. | message = {:?} | invoker_uuid = {:?}", message, invoker_uuid);
+
             match message {
                 InputMessage::Exited { 
-                    exit_code 
+                    exit_code,
+                    exit_data
                 } => return Ok(exit_code),
-                InputMessage::Verdict { verdict, data } => {
+                InputMessage::Verdict { verdict, message } => {
                     let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
                         log::error!("invoker_side: Invoker send VERDICT message, before taking submission");
                         continue 'lp;
                     };
-                    tokio::spawn(testing_system::TestingSystem::send_message(testing_system::gateway::OutputMessage::from_invoker_message(verdict, data, submission_uuid)));
-                    invoker.lock().await.submission_uuid = None;
-                    tokio::spawn(Self::take_submission(invoker, server));
+                    
+                    let invoker = invoker.clone();
+                    let server = server.clone();
+                    tokio::spawn(async move {
+                        let test_results = server.lock().await.tests_results.remove(&submission_uuid).unwrap_or_else(|| {
+                            log::error!("invoker_handler: Undefined test results. | submission_uuid: {:?}", submission_uuid);
+
+                            Vec::new()
+                        });
+                        let Some(testing_system) = server.lock().await.testing_system.clone() else {
+                            log::error!("invoker_handler: Recieved verdict message, but testing_systeem didn't connect. | invoker_uuid = {:?}", invoker_uuid);
+
+                            return;
+                        };
+                        tokio::spawn(testing_system::TestingSystem::send_submission_verdict(testing_system, verdict, submission_uuid, test_results, message));
+
+                        Self::finish_current_submission(invoker.clone(), server.clone()).await;
+                        match Self::take_submission(invoker.clone(), server.clone()).await {
+                            Ok(Some(uuid)) => log::info!("Invoker taked new submission after completing previous | uuid = {:?} | submission_uuid = {:?}", invoker_uuid, uuid),
+                            Ok(None) => log::info!("Invoker didn't take new submission after completing previous | uuid = {:?}", invoker_uuid),
+                            Err(error) => log::error!("Invoker couldn't take new submission due to the error | error = {} | uuid = {:?}", error.to_string(), invoker_uuid)
+                        }
+                    });
+                }
+                InputMessage::TestVerdict { result, test, data } => {
+                    {
+                        let invoker = invoker.clone();
+                        let server = server.clone();
+                        let result = result.clone();
+                        tokio::spawn(async move {
+                            let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
+                                log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
+
+                                return;
+                            };
+                            let mut server_locked = server.lock().await;
+                            let Some(tests_reult) = server_locked.tests_results.get_mut(&submission_uuid) else {
+                                log::error!("invoker_handler: Invoke sent test verdict, tests result isn't predefinted | invoker_uuid: {:?}", invoker_uuid);
+
+                                return;
+                            };
+                            let Some(test_result) = tests_reult.get_mut(test as usize) else {
+                                log::error!("invoker_handler: Invoker ssend test verdict, but current test_result is to small. | invoker_uuid: {:?}", invoker_uuid);
+
+                                return;
+                            };
+                            *test_result = result;
+                        });
+                    }
+                    {
+                        let invoker = invoker.clone();
+                        let server = server.clone();
+                        tokio::spawn(async move {
+                            let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
+                                log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
+
+                                return;
+                            };
+                            let Some(testing_system) = server.lock().await.testing_system.clone() else {
+                                log::error!("invoker_handler: Recieved test verdict message, but testing_systeem didn't connect. | invoker_uuid = {:?}", invoker_uuid);
+
+                                return;
+                            };
+                            tokio::spawn(testing_system::TestingSystem::send_test_verdict(testing_system, result, test, data, submission_uuid));
+                        });
+                    }
                 }
                 _ => {}
             }
