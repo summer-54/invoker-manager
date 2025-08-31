@@ -5,15 +5,10 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "*", features = ["full"] }
-# tokio-websockets = { version = "0.12.0", features = ["server", "openssl", "native-tls"] }
-# tokio-tungstenite = { version = "*", features = ["deflate"] }
 ratchet_rs = { version = "*", features = ["split"] }
 ratchet_deflate = { version = "*" }
 bytes = { version = "*" }
 uuid = { version = "*" }
-tokio-native-tls = { version = "*" }
-openssl = { version = "*" }
 rand = { version = "*" }
-futures-util = { version = "*" }
 env_logger = { version = "*" }
 log = { version = "*" }
