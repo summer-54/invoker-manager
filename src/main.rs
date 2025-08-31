@@ -5,17 +5,23 @@ use server::Server;
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    log::info!("Invoker manager started");
 
     let server = Server::new("127.0.0.1:5454".to_string());
     log::info!("Server created");
+    let server_cl = server.clone();
+    let inv_side = tokio::spawn(async move {
+        log::info!("Invoker side started");
+        if let Err(err) = Server::start_invokers_side(server_cl).await {
+            log::error!("Invokers side stoped with error | error = {}", err);
+        }
+    });
+    let server_cl = server.clone();
+    let ts_side = tokio::spawn(async move {
+        log::info!("Testing system side started");
+        if let Err(err) =  Server::start_testing_system_side(server_cl, "ws://127.0.0.1:5477").await {
+            log::error!("Testing system side stoped with error | error = {}", err);
+        };
+    });
 
-    let invokers = Server::start_invokers_side(server.clone());
-    log::info!("Invoker side started");
-
-    let testing_system = Server::start_testing_system_side(server.clone());
-    log::info!("Testing system side started");
-
-    tokio::try_join!(invokers, testing_system).unwrap();
-    log::info!("Invoker manager stopped");
+    tokio::try_join!(inv_side, ts_side).unwrap();
 }

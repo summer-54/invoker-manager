@@ -39,8 +39,8 @@ impl Server {
     }
 
     pub async fn start_invokers_side(server: Arc<Mutex<Self>>) -> Result<(), String> {
-        let address = server.lock().await.address.clone();
-        let Ok(listener) = TcpListener::bind(address).await else {
+        let adress = server.lock().await.address.clone();
+        let Ok(listener) = TcpListener::bind(adress).await else {
             log::error!("Can't bind tcp listener for testing system side");
 
             return Err("Can't bind tcp listener for testing system side".to_string());
@@ -60,16 +60,14 @@ impl Server {
                             return;
                         };
                         
-                        if let Err(err) = Self::add_invoker(server, upgr.into_websocket()).await {
-                            log::error!("Adding invoker falied | error = {}", err);
-                        };
+                        Self::add_invoker(server, upgr.into_websocket());
                     });
                 }
             }
         }
     }
-    pub async fn start_testing_system_side(server: Arc<Mutex<Self>>, address: &str) -> Result<(), String> {
-        let testing_system = match TestingSystem::connect_to(address).await {
+    pub async fn start_testing_system_side(server: Arc<Mutex<Self>>, address: String) -> Result<(), String> {
+        let testing_system = match TestingSystem::connect_to("ws://127.0.0.1:5477").await {
             Ok(ts) => ts,
             Err(error) => {
                 log::error!("Can't open connection to testing system side | error = {}", error.to_string());

@@ -1,16 +1,16 @@
 pub mod gateway;
 
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
-use futures_util::{stream::{SplitSink, SplitStream}, StreamExt};
+use ratchet_deflate::{DeflateDecoder, DeflateEncoder};
+use ratchet_rs::{Receiver, Sender};
 use tokio::{net::TcpStream, sync::Mutex};
-use tokio_tungstenite::WebSocketStream;
 use uuid::Uuid;
 use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
 
-pub type WSReader = SplitStream<WebSocketStream<TcpStream>>;
-pub type WSWriter = SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>;
+pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
+pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
 
 pub struct Invoker {
     uuid: Uuid,
@@ -34,7 +34,9 @@ impl Invoker {
         tokio::spawn(async move {
             let writer = invoker.lock().await.writer.clone();
             let mut writer_locked = writer.lock().await;
-            Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{submission}).await;
+            if let Err(err) = Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{submission}).await {
+                log::error!("Couldn't send TestSubmission message to invoker | error = {}", err);
+            };
         });
     }
 
@@ -80,10 +82,11 @@ impl Invoker {
             log::info!("invoker_handler: Recieeved message from invoker. | message = {:?} | invoker_uuid = {:?}", message, invoker_uuid);
 
             match message {
-                InputMessage::Exited { 
-                    exit_code,
-                    exit_data
-                } => return Ok(exit_code),
+                InputMessage::Exited { exit_code, exit_message } => {
+                    log::info!("Recieved an exit message | code = {} | message = {}", exit_code, exit_message);
+
+                    return Ok(exit_code);
+                },
                 InputMessage::Verdict { verdict, message } => {
                     let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
                         log::error!("invoker_side: Invoker send VERDICT message, before taking submission");

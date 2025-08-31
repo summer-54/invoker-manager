@@ -1,7 +1,6 @@
-use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite::{Error, Message};
+use bytes::BytesMut;
 use uuid::Uuid;
-use std::{io, str};
+use ratchet_rs::{Error};
 use super::{WSReader, WSWriter};
 use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
@@ -9,20 +8,11 @@ use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 pub struct Gateway;
 
 impl Gateway { // wrong protocol
+           
     async fn read_data_from(socket: &mut WSReader) -> Result<Vec<u8>, Error> {
-        let Some(bin) = socket.next().await else {
-            return Err(Error::Io(io::Error::new(io::ErrorKind::NotConnected , "Can't read message")));
-        };
-        Ok(bin?.into_data().to_vec())
-    }
-
-    fn first_line_of_bytes(data: Vec<u8>) -> (String, String, Vec<u8>) {
-        let mut endl = [0; 1];
-        '\n'.encode_utf8(&mut endl);
-        let (first_line, data) = data.split_at(data.iter().position(|&x| x == endl[0]).unwrap_or(data.len()));
-        let first_line = str::from_utf8(first_line).unwrap_or("UNDEFINED").to_string();
-        let (message_type, first_line_arguments) = first_line.split_at(first_line.find(' ').unwrap_or(first_line.len()));
-        (message_type.to_string(), first_line_arguments.to_string(), data.to_vec())
+        let mut bin = BytesMut::new();
+        socket.read(&mut bin).await?;
+        Ok(bin.to_vec())
     }
 
     pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, Error> {
@@ -32,7 +22,7 @@ impl Gateway { // wrong protocol
     }
 
     pub async fn send_message(socket: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
-        socket.send(Message::binary(message.parse_to())).await?;
+        socket.write_binary(message.parse_to()).await?;
         Ok(())
     }
 }
@@ -61,7 +51,13 @@ pub enum OutputMessage {
 
 impl InputMessage {
     fn parse(bytes: Vec<u8>) -> Result<Self, Error> {
-        todo!();
+        let data_uuid: [u8; 16] = bytes[0..16].try_into().unwrap_or([0u8; 16]);
+        let uuid = Uuid::from_bytes(data_uuid);
+        let test_count = u16::from_be_bytes(bytes[16..18].try_into().unwrap_or([0u8; 2]));
+        let data = bytes[18..].to_vec();
+        Ok(Self::SubmissionRun {
+            submission: Submission::new(uuid, data, test_count),
+        })
     }
 }
 

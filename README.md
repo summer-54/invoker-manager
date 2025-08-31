@@ -38,9 +38,9 @@ DATA
 <data>
 ```
 ## invoker-manager <- testing-system
-
-in progress
-
+```
+<uuid [16 bites]><test count [2 bites]><data>
+```
 ## invoker-manager <-> invoker
 
 You can find it in [invoker repository](https://github.com/summer-54/invoker).

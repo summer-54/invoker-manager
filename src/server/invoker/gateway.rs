@@ -1,9 +1,8 @@
-use futures_util::{SinkExt, StreamExt};
-use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::{Error, Message};
 use uuid::Uuid;
-use std::{collections::HashMap, io, str::{self, FromStr}, sync::Arc};
-use super::{Invoker, WSReader, WSWriter};
+use bytes::BytesMut;
+use std::{collections::HashMap, str::{self, FromStr}};
+use super::{WSReader, WSWriter};
+use ratchet_rs::Error;
 use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 pub struct Gateway;
@@ -11,15 +10,14 @@ pub struct Gateway;
 impl Gateway {
 
     pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
-        writer.send(Message::binary(message.parse_to())).await?;
+        writer.write_binary(message.parse_to()).await?;
         Ok(())
     }
 
     async fn read_data_from(socket: &mut WSReader) -> Result<Vec<u8>, Error> {
-        let Some(bin) = socket.next().await else {
-            return Err(Error::Io(io::Error::new(io::ErrorKind::NotConnected , "Can't read message")));
-        };
-        Ok(bin?.into_data().to_vec())
+         let mut bin = BytesMut::new();
+        socket.read(&mut bin).await?;
+        Ok(bin.to_vec())
     }
 
     fn first_line_of_bytes(data: &Vec<u8>) -> (String, String, &[u8]) {
@@ -81,7 +79,7 @@ pub enum InputMessage {
     },
     Exited { // don't parsed
         exit_code: String,
-        exit_data: Vec<u8>,
+        exit_message: String,
     },
     Error { // don't parsed
         message: String,
@@ -109,13 +107,13 @@ impl InputMessage {
         };
         match message_type.as_str() {
             "TOKEN" => {
-                let uuid = Uuid::from_str(headers.get("TOKEN").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
+                let uuid = Uuid::from_str(headers.get("ID").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
                 Ok(InputMessage::Token{
                     uuid,
                 })
             },
             "VERDICT" => {
-                let verdict = Verdict::parse(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
+                let verdict = Verdict::parse(headers.get("NAME").unwrap_or(&"UV".to_string()));
                 if let Verdict::OK = verdict {
                     let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
                     let points = headers.get("GROUPS").cloned().unwrap_or("0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
@@ -132,7 +130,7 @@ impl InputMessage {
                 }
             },
             "TEST" => {
-                let test: u16 = headers.get("TEST").map_or(1, |v| u16::from_str(v).unwrap_or(1));
+                let test: u16 = headers.get("ID").map_or(1, |v| u16::from_str(v).unwrap_or(1));
                 let verdict = Verdict::parse(&headers.get("VERDICT").cloned().unwrap_or("UV".to_string()));
                 let time: f64 = headers.get("TIME").map_or(0.0, |v| f64::from_str(v).unwrap_or(0.0));
                 let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
@@ -147,21 +145,22 @@ impl InputMessage {
                 })
             },
             "EXITED" => {
-                let exit_code = headers.get("EXITED").cloned().unwrap_or("0".to_string());
+                let exit_code = headers.get("CODE").cloned().unwrap_or("0".to_string());
+                let exit_message = headers.get("MESSAGE").cloned().unwrap_or("0".to_string());
                 Ok(InputMessage::Exited{
                     exit_code,
-                    exit_data: data,
+                    exit_message,
                 })
             },
             "ERROR" => {
-                let error = headers.get("ERROR").cloned().unwrap_or("".to_string());
+                let error = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
                 Ok(InputMessage::Error{
                     message: error
                 })
             },
             "OPERROR" => {
-                let operror = headers.get("OPERROR").cloned().unwrap_or("".to_string());
-                Ok(InputMessage::Error{
+                let operror = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
+                Ok(InputMessage::OpError{
                     message: operror
                 })
             },

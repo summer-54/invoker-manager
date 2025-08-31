@@ -2,16 +2,17 @@ pub mod gateway;
 
 use std::sync::Arc;
 
-use futures_util::{stream::{SplitSink, SplitStream}, StreamExt};
+use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
+use ratchet_deflate::{DeflateDecoder, DeflateEncoder, DeflateExtProvider};
 use gateway::{Gateway, InputMessage, OutputMessage};
 use tokio::{net::TcpStream, sync::Mutex};
-use tokio_tungstenite::{connect_async, tungstenite::{client::IntoClientRequest, http::HeaderValue, Error}, MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
+
 use super::{verdict::{TestResult, Verdict}, Server};
 
 
-pub type WSReader = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-pub type WSWriter = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>;
+pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
+pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
 
 pub struct TestingSystem {
     writer: Arc<Mutex<WSWriter>>,
@@ -20,11 +21,12 @@ pub struct TestingSystem {
 
 impl TestingSystem {
     pub async fn connect_to(url: &str) -> Result<Self, Error> {
-        let mut request = url.into_client_request()?;
-        request.headers_mut().insert("a", HeaderValue::from_str("b")?);
-        let (stream, responce) = connect_async(request.clone()).await?;
-        let (writer, reader) = stream.split();
-        log::info!("testing_system_side: Connected to tssystem | response = {:?} | request = {:?} ", responce, request);
+
+        let stream = TcpStream::connect(url).await?;
+        let socket = ratchet_rs::subscribe_with(WebSocketConfig::default(), stream, "ws://127.0.0.1/invoker-manager", DeflateExtProvider::default(), SubprotocolRegistry::default()).await?.into_websocket();
+        let (writer, reader) = socket.split()?;
+
+        log::info!("testing_system_side: Connected to tssystem");
         Ok(Self::new(reader, writer))
     }
     pub fn new(reader: WSReader, writer: WSWriter) -> Self {
@@ -53,17 +55,22 @@ impl TestingSystem {
     pub async fn send_submission_verdict(testing_system: Arc<Mutex<Self>>, verdict: Verdict, submission_uuid: Uuid, tests_result: Vec<TestResult>, message: Result<(u8, Vec<u8>), String>) {
         let writer = testing_system.lock().await.writer.clone();
         let mut writer = writer.lock().await;
-        Gateway::send_message(&mut writer, OutputMessage::SubmissionVerdict{
-            verdict, submission_uuid, tests_result, message,
-        }).await;
-        log::info!("testing_system: SubmissionVerdict message sent")
+        if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::SubmissionVerdict{ verdict, submission_uuid, tests_result, message,
+        }).await {
+            log::error!("Couldn't send message | error = {}", err);
+        } else {
+            log::info!("testing_system: SubmissionVerdict message sent");
+        }
     }
     pub async fn send_test_verdict(testing_system: Arc<Mutex<Self>>, result: TestResult, test: u16, data: Vec<u8>, submission_uuid: Uuid) {
         let writer = testing_system.lock().await.writer.clone();
         let mut writer = writer.lock().await;
-        Gateway::send_message(&mut writer, OutputMessage::TestVerdict{
+        if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::TestVerdict{
             result, submission_uuid, test, data
-        }).await;
-        log::info!("testing_system: TestVerdict message sent")
+        }).await {
+            log::error!("Couldn't send message | error = {}", err);
+        } else {
+            log::info!("testing_system: TestVerdict message sent");
+        }
     }
 }
