@@ -6,7 +6,7 @@ use server::Server;
 async fn main() {
     env_logger::init();
 
-    let server = Server::new("127.0.0.1:5454".to_string());
+    let server = Server::new("192.168.1.128:5477".to_string());
     log::info!("Server created");
     let server_cl = server.clone();
     let inv_side = tokio::spawn(async move {
@@ -18,7 +18,7 @@ async fn main() {
     let server_cl = server.clone();
     let ts_side = tokio::spawn(async move {
         log::info!("Testing system side started");
-        if let Err(err) =  Server::start_testing_system_side(server_cl, "ws://127.0.0.1:5477").await {
+        if let Err(err) =  Server::start_testing_system_side(server_cl, "ws://127.0.0.1:5454").await {
             log::error!("Testing system side stoped with error | error = {}", err);
         };
     });

@@ -42,8 +42,8 @@ impl Invoker {
 
     pub async fn take_submission(invoker: Arc<Mutex<Invoker>>, server: Arc<Mutex<Server>>) -> Result<Option<Uuid>, String> {
         let invoker_locked = invoker.lock().await;
-        if let None = invoker_locked.submission_uuid {
-            log::error!("Invoker already has submission and can't take new one | invoker_uuid = {}", invoker_locked.uuid);
+        if let Some(uuid) = invoker_locked.submission_uuid {
+            log::error!("Invoker already has submission and can't take new one | invoker_uuid = {} | submssion = {}", invoker_locked.uuid, uuid);
             return Err("Invoker already has submission and can't take new one.".to_string());
         }
         let submission = {
@@ -158,7 +158,13 @@ impl Invoker {
                             tokio::spawn(testing_system::TestingSystem::send_test_verdict(testing_system, result, test, data, submission_uuid));
                         });
                     }
-                }
+                },
+                InputMessage::Error { message } => {
+                    log::error!("Invoker returned error | message = {} | uuid = {}", message, invoker_uuid);
+                },
+                InputMessage::OpError { message } => {
+                    log::error!("Invoker returned operror | message = {} | uuid = {}", message, invoker_uuid);
+                },
                 _ => {}
             }
         }

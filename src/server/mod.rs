@@ -50,20 +50,25 @@ impl Server {
         loop {
             if let Ok((connection, address)) = listener.accept().await {
                 log::info!("invoker_side: Finded connection | address = {}", address);
-                if let Ok(stream) = ratchet_rs::accept_with(connection, WebSocketConfig::default(), DeflateExtProvider::with_config(DeflateConfig::default()), SubprotocolRegistry::default()).await {
-                    log::info!("invoker_side: Finded new invoker");
-                    let server = server.clone();
-                    tokio::spawn(async move {
-                        let Ok(upgr) = stream.upgrade().await else {
-                            log::info!("invoker_side: Couldn't update to ws");
+                match ratchet_rs::accept_with(connection, WebSocketConfig::default(), DeflateExtProvider::with_config(DeflateConfig::default()), SubprotocolRegistry::default()).await {
+                    Ok(stream) => {
+                        log::info!("invoker_side: Finded new invoker");
+                        let server = server.clone();
+                        tokio::spawn(async move {
+                            let Ok(upgr) = stream.upgrade().await else {
+                                log::info!("invoker_side: Couldn't update to ws");
+                                
+                                return;
+                            };
                             
-                            return;
-                        };
-                        
-                        if let Err(err) = Self::add_invoker(server, upgr.into_websocket()).await {
-                            log::error!("Adding invoker falied | error = {}", err);
-                        };
-                    });
+                            if let Err(err) = Self::add_invoker(server, upgr.into_websocket()).await {
+                                log::error!("Adding invoker falied | error = {}", err);
+                            };
+                        });
+                    },
+                    Err(err) => {
+                        log::error!("invoker_side: Failed connection | error = {}", err);
+                    }
                 }
             }
         }
@@ -99,6 +104,7 @@ impl Server {
 
             return Err("Stream couldn't be splited".to_string());
         };
+        log::info!("invoker: Stream splitted");
         let Ok(message) = Gateway::read_message_from(&mut reader).await else {
             log::error!("Couldn't read message from stream");
 

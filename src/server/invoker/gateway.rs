@@ -20,11 +20,11 @@ impl Gateway {
         Ok(bin.to_vec())
     }
 
-    fn first_line_of_bytes(data: &Vec<u8>) -> (String, String, &[u8]) {
+    fn first_line_of_bytes(data: &[u8]) -> (String, String, &[u8]) {
         let mut endl = [0; 1];
         '\n'.encode_utf8(&mut endl);
-        let (first_line, data) = data.split_at(data.iter().position(|&x| x == endl[0]).unwrap_or(data.len()));
-        let first_line = str::from_utf8(first_line).unwrap_or("UNDEFINED").to_string();
+        let (first_line, data) = data.split_at(data.iter().position(|&x| x == endl[0]).unwrap_or(data.len() - 1) + 1);
+        let first_line = str::from_utf8(first_line).unwrap_or("UNDEFINED").trim().to_string();
         let (message_type, first_line_arguments) = first_line.split_at(first_line.find(' ').unwrap_or(first_line.len()));
         (message_type.to_string(), first_line_arguments.to_string(), data)
     }
@@ -35,10 +35,13 @@ impl Gateway {
 
             return Err("Couldn't read data from socket".to_string());
         };
+        log::info!("Data readed from socket");
         let message = InputMessage::parse_from(data)?;
+        log::info!("Data from socket parsed | message = {:?}", message);
         Ok(message)
     }
     pub fn to_vec_u8(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+        // TRIM()
         let Ok(string) = String::from_utf8(bytes) else {
             log::error!("Bytes couldn't be parsed to string");
 
@@ -48,18 +51,23 @@ impl Gateway {
     }
 
     pub fn parse_headers(bytes: Vec<u8>) -> (HashMap<String, String>, Vec<u8>) {
-        let mut data = bytes;
+        let mut data = &bytes[..];
         let mut headers = HashMap::new();
         loop {
+            if data.is_empty() {
+                break;
+            }
             let (key, val, bytes) = Self::first_line_of_bytes(&data);
-            data = bytes.to_vec();
+            let key = key.trim().to_string();
+            let val = val.trim().to_string();
+            data = bytes;
             if key == "DATA" {
                 break;
             } else {
                 headers.insert(key, val);
             }
         }
-        (headers, data)
+        (headers, data.to_vec())
     }
 }
 
