@@ -1,7 +1,7 @@
 # invoker-manager
 Server tool which keeps connections to invokers and distribute submissions between them.
 
-## invoker-manager -> testing-system
+## invoker-manager → testing-system
 ### Submission verdict
 ```
 TYPE VERDICT
@@ -48,10 +48,10 @@ VERDICT <verdict>
 DATA
 <data>
 ```
-## invoker-manager <- testing-system
+## invoker-manager ← testing-system
 ```
 <uuid [16 bites]><test count [2 bites]><data>
 ```
-## invoker-manager <-> invoker
+## invoker-manager ←→ invoker
 
 You can find it in [invoker repository](https://github.com/summer-54/invoker).
