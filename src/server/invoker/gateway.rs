@@ -122,6 +122,9 @@ impl InputMessage {
             },
             "VERDICT" => {
                 let verdict = Verdict::parse(headers.get("NAME").unwrap_or(&"UV".to_string()));
+                if let Verdict::UV = verdict {
+                    log::error!("Readed UV verdict | headers = {:?} | data = {:?}", headers, data);
+                }
                 if let Verdict::OK = verdict {
                     let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
                     let points = headers.get("GROUPS").cloned().unwrap_or("0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();

@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 use super::{verdict::{TestResult, Verdict}, Server};
 
-
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
 
@@ -20,10 +19,9 @@ pub struct TestingSystem {
 }
 
 impl TestingSystem {
-    pub async fn connect_to(url: &str) -> Result<Self, Error> {
-
-        let stream = TcpStream::connect(url).await?;
-        let socket = ratchet_rs::subscribe_with(WebSocketConfig::default(), stream, "ws://127.0.0.1/invoker-manager", DeflateExtProvider::default(), SubprotocolRegistry::default()).await?.into_websocket();
+    pub async fn connect_to(ip: &str, url: &str) -> Result<Self, Error> {
+        let stream = TcpStream::connect(ip).await?;
+        let socket = ratchet_rs::subscribe_with(WebSocketConfig::default(), stream, url, DeflateExtProvider::default(), SubprotocolRegistry::default()).await?.into_websocket();
         let (writer, reader) = socket.split()?;
 
         log::info!("testing_system_side: Connected to tssystem");

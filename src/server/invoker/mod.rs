@@ -29,10 +29,10 @@ impl Invoker {
         }
     }
 
-    pub async fn run_submission(invoker: Arc<Mutex<Invoker>>, submission: Submission) {
-        invoker.lock().await.submission_uuid = Some(submission.uuid);
+    pub async fn run_submission(invoker_locked: &mut Invoker, submission: Submission) {
+        invoker_locked.submission_uuid = Some(submission.uuid);
+        let writer = invoker_locked.writer.clone();
         tokio::spawn(async move {
-            let writer = invoker.lock().await.writer.clone();
             let mut writer_locked = writer.lock().await;
             if let Err(err) = Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{submission}).await {
                 log::error!("Couldn't send TestSubmission message to invoker | error = {}", err);
@@ -41,23 +41,33 @@ impl Invoker {
     }
 
     pub async fn take_submission(invoker: Arc<Mutex<Invoker>>, server: Arc<Mutex<Server>>) -> Result<Option<Uuid>, String> {
-        let invoker_locked = invoker.lock().await;
+        let mut invoker_locked = invoker.lock().await;
+        log::info!("Invoker tries to take new submission | uuid = {}", invoker_locked.uuid);
         if let Some(uuid) = invoker_locked.submission_uuid {
             log::error!("Invoker already has submission and can't take new one | invoker_uuid = {} | submssion = {}", invoker_locked.uuid, uuid);
             return Err("Invoker already has submission and can't take new one.".to_string());
         }
         let submission = {
+
+            let Ok(v) = std::fs::read("problem.tar") else {
+                return Err("LITTLE ERROR".to_string());
+            };
+            Some(Submission::new(uuid::Uuid::from_u128(12313u128), v, 3))
+            /* Right: 
             let submissions_pool_receiver_cloned = server.lock().await.submissions_pool_receiver.clone();
             let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
             submissions_pool_receiver.recv().await
+            */
         };
         if let Some(submission) = submission {
             let submission_uuid = submission.uuid;
             log::info!("Invoker takes new submission | submission_uuid = {}", submission_uuid);
-            Self::run_submission(invoker.clone(), submission).await;
+            Self::run_submission(&mut invoker_locked, submission).await;
+            log::info!("Invoker taked new submission | submission_uuid = {}", submission_uuid);
             drop(invoker_locked);
             Ok(Some(submission_uuid))
         } else {
+            log::info!("Invoker can't take new submission | uuid = {}", invoker_locked.uuid);
             drop(invoker_locked);
             Ok(None)
         }
@@ -69,7 +79,7 @@ impl Invoker {
 
     pub async fn message_handler(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
         let reader = invoker.lock().await.reader.clone();
-        let invoker_uuid = invoker.lock().await.uuid;
+        let invoker_uuid = invoker.lock().await.uuid.clone();
         'lp: loop {
             let mut reader_locked = reader.lock().await;
             let message = match Gateway::read_message_from(&mut reader_locked).await {
@@ -160,10 +170,10 @@ impl Invoker {
                     }
                 },
                 InputMessage::Error { message } => {
-                    log::error!("Invoker returned error | message = {} | uuid = {}", message, invoker_uuid);
+                    log::warn!("Invoker returned error | message = {} | uuid = {}", message, invoker_uuid);
                 },
                 InputMessage::OpError { message } => {
-                    log::error!("Invoker returned operror | message = {} | uuid = {}", message, invoker_uuid);
+                    log::warn!("Invoker returned operror | message = {} | uuid = {}", message, invoker_uuid);
                 },
                 _ => {}
             }

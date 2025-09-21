@@ -17,7 +17,6 @@ use verdict::TestResult;
 const MAX_SUBMISSIONS_COUNT: usize = 10000;
 
 pub struct Server {
-    address: String,
     submissions_pool_receiver: Arc<Mutex<mpsc::Receiver<Submission>>>,
     submissions_pool_sender: Arc<Mutex<mpsc::Sender<Submission>>>,
     invokers: HashMap<Uuid, Arc<Mutex<Invoker>>>,
@@ -26,10 +25,9 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(address: String) -> Arc<Mutex<Self>> {
+    pub fn new() -> Arc<Mutex<Self>> {
         let (sps, spr) = mpsc::channel::<Submission>(MAX_SUBMISSIONS_COUNT);
         Arc::new(Mutex::new(Self {
-            address,
             submissions_pool_receiver: Arc::new(Mutex::new(spr)),
             submissions_pool_sender: Arc::new(Mutex::new(sps)),
             invokers: HashMap::new(),
@@ -38,12 +36,11 @@ impl Server {
         }))
     }
 
-    pub async fn start_invokers_side(server: Arc<Mutex<Self>>) -> Result<(), String> {
-        let address = server.lock().await.address.clone();
+    pub async fn start_invokers_side(server: Arc<Mutex<Self>>, address: String) -> Result<(), String> {
         let Ok(listener) = TcpListener::bind(address).await else {
-            log::error!("Can't bind tcp listener for testing system side");
+            log::error!("Can't bind tcp listener for invokers side");
 
-            return Err("Can't bind tcp listener for testing system side".to_string());
+            return Err("Can't bind tcp listener for invokers side".to_string());
         };
         log::info!("invoker_side: Binded");
 
@@ -73,8 +70,8 @@ impl Server {
             }
         }
     }
-    pub async fn start_testing_system_side(server: Arc<Mutex<Self>>, address: &str) -> Result<(), String> {
-        let testing_system = match TestingSystem::connect_to(address).await {
+    pub async fn start_testing_system_side(server: Arc<Mutex<Self>>, ip: &str, url: &str) -> Result<(), String> {
+        let testing_system = match TestingSystem::connect_to(ip, url).await {
             Ok(ts) => ts,
             Err(error) => {
                 log::error!("Can't open connection to testing system side | error = {}", error.to_string());
