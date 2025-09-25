@@ -54,4 +54,8 @@ DATA
 ```
 ## invoker-manager ←→ invoker
 
+## verdicts
+
+Standart verdicts and new one - SK = Skipped
+
 You can find it in [invoker repository](https://github.com/summer-54/invoker).

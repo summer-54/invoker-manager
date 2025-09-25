@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Submission {
     pub uuid: Uuid,
     pub tests_count: u16,

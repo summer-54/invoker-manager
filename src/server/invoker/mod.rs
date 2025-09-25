@@ -48,16 +48,13 @@ impl Invoker {
             return Err("Invoker already has submission and can't take new one.".to_string());
         }
         let submission = {
-
-            let Ok(v) = std::fs::read("problem.tar") else {
+            /*let Ok(v) = std::fs::read("problem.tar") else {
                 return Err("LITTLE ERROR".to_string());
             };
-            Some(Submission::new(uuid::Uuid::from_u128(12313u128), v, 3))
-            /* Right: 
+            Some(Submission::new(uuid::Uuid::from_u128(12313u128), v, 3))*/ 
             let submissions_pool_receiver_cloned = server.lock().await.submissions_pool_receiver.clone();
             let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
             submissions_pool_receiver.recv().await
-            */
         };
         if let Some(submission) = submission {
             let submission_uuid = submission.uuid;
@@ -137,29 +134,6 @@ impl Invoker {
 
                                 return;
                             };
-                            let mut server_locked = server.lock().await;
-                            let Some(tests_reult) = server_locked.tests_results.get_mut(&submission_uuid) else {
-                                log::error!("invoker_handler: Invoke sent test verdict, tests result isn't predefinted | invoker_uuid: {:?}", invoker_uuid);
-
-                                return;
-                            };
-                            let Some(test_result) = tests_reult.get_mut(test as usize) else {
-                                log::error!("invoker_handler: Invoker ssend test verdict, but current test_result is to small. | invoker_uuid: {:?}", invoker_uuid);
-
-                                return;
-                            };
-                            *test_result = result;
-                        });
-                    }
-                    {
-                        let invoker = invoker.clone();
-                        let server = server.clone();
-                        tokio::spawn(async move {
-                            let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
-                                log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
-
-                                return;
-                            };
                             let Some(testing_system) = server.lock().await.testing_system.clone() else {
                                 log::error!("invoker_handler: Recieved test verdict message, but testing_systeem didn't connect. | invoker_uuid = {:?}", invoker_uuid);
 
@@ -167,6 +141,29 @@ impl Invoker {
                             };
                             tokio::spawn(testing_system::TestingSystem::send_test_verdict(testing_system, result, test, data, submission_uuid));
                         });
+                    }
+                    'bl : {
+                        let invoker = invoker.clone();
+                        let server = server.clone();
+                        //tokio::spawn(async move {
+                            let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
+                                log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
+
+                                break 'bl;
+                            };
+                            let mut server_locked = server.lock().await;
+                            let Some(tests_reult) = server_locked.tests_results.get_mut(&submission_uuid) else {
+                                log::error!("invoker_handler: Invoke sent test verdict, tests result isn't predefinted | invoker_uuid: {:?}", invoker_uuid);
+
+                                break 'bl;
+                            };
+                            let Some(test_result) = tests_reult.get_mut(test as usize - 1) else {
+                                log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {} | current map = {:?}", invoker_uuid, test - 1, tests_reult.len(), submission_uuid, server_locked.tests_results);
+
+                                break 'bl;
+                            };
+                            *test_result = result;
+                        //});
                     }
                 },
                 InputMessage::Error { message } => {

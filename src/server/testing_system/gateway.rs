@@ -10,9 +10,14 @@ pub struct Gateway;
 impl Gateway { // wrong protocol
            
     async fn read_data_from(socket: &mut WSReader) -> Result<Vec<u8>, Error> {
-        let mut bin = BytesMut::new();
-        socket.read(&mut bin).await?;
-        Ok(bin.to_vec())
+        loop {
+            let mut bin = BytesMut::new();
+            let message = socket.read(&mut bin).await?;
+            if message.is_binary() {
+                log::info!("Read data from socket");
+                return Ok(bin.to_vec())
+            }
+        }
     }
 
     pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, Error> {
@@ -27,7 +32,7 @@ impl Gateway { // wrong protocol
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InputMessage {
     SubmissionRun {
         submission: Submission,

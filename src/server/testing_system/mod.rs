@@ -1,6 +1,6 @@
 pub mod gateway;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
 use ratchet_deflate::{DeflateDecoder, DeflateEncoder, DeflateExtProvider};
@@ -34,19 +34,26 @@ impl TestingSystem {
         }
     }
     pub async fn message_handler(testing_system: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
-        let reader = testing_system.lock().await.reader.clone();
+        let reader = {
+            testing_system.lock().await.reader.clone()
+        };
         let mut reader_locked = reader.lock().await;
-        loop {
+        'lp: loop {
             match Gateway::read_message_from(&mut reader_locked).await {
                 Ok(message) => {
-                    log::info!("testing_system_side: Recieved a message | message = {:?}", message);
+                    if let InputMessage::SubmissionRun{submission} = message.clone() {
+                        log::info!("testing_system_side: Recieved a message | message = {:?}", submission.uuid);
+                    }
                     match message {
                         InputMessage::SubmissionRun { submission } => {
                             tokio::spawn(Server::new_submission(server.clone(), submission));
                         },
                     }
                 },
-                Err(err) => log::error!("testing_system_side: Recieved a unparseable message | message = {:?}", err),
+                Err(err) => {
+                    log::error!("testing_system_side: Recieved a unparseable message | message = {:?}", err);
+                    break 'lp Err("testing system sent wrong message".to_string());
+                }
             }
         }
     }
@@ -69,6 +76,14 @@ impl TestingSystem {
             log::error!("Couldn't send message | error = {}", err);
         } else {
             log::info!("testing_system: TestVerdict message sent");
+        }
+    }
+    pub async fn pinger(testing_system: Arc<Mutex<Self>>) -> Result<(), Error> {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            let sender = testing_system.lock().await.writer.clone();
+            sender.lock().await.write_ping([0u8; 0]).await?;
         }
     }
 }

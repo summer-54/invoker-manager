@@ -49,7 +49,7 @@ impl Server {
                 log::info!("invoker_side: Finded connection | address = {}", address);
                 match ratchet_rs::accept_with(connection, WebSocketConfig::default(), DeflateExtProvider::with_config(DeflateConfig::default()), SubprotocolRegistry::default()).await {
                     Ok(stream) => {
-                        log::info!("invoker_side: Finded new invoker");
+                        log::info!("invoker_side: Found new invoker");
                         let server = server.clone();
                         tokio::spawn(async move {
                             let Ok(upgr) = stream.upgrade().await else {
@@ -81,8 +81,10 @@ impl Server {
         log::info!("testing_system_side: Started");
 
         server.lock().await.testing_system = Some(Arc::new(Mutex::new(testing_system)));
-        if let Some(testing_system) = server.lock().await.testing_system.clone() {
+        if let Some(testing_system) = { server.lock().await.testing_system.clone() } {
             log::info!("testing_system_side: Connected to testing system");
+
+            tokio::spawn(TestingSystem::pinger(testing_system.clone()));
 
             let result = TestingSystem::message_handler(testing_system, server.clone()).await;
             if let Err(error) = result {
@@ -107,27 +109,31 @@ impl Server {
 
             return Err("Couldn't read message from stream".to_string());
         };
-        log::info!("invoker: Sended connect message");
+        log::info!("invoker: Sent connect message");
 
         if let InputMessage::Token { uuid } = message {
             let invoker = Arc::new(Mutex::new(Invoker::new(uuid, reader, writer)));
-            server.lock().await.invokers.insert(uuid, invoker.clone());
+            {
+                let mut server_locked = server.lock().await;
+                server_locked.invokers.insert(uuid, invoker.clone());
+            }
             log::info!("invoker: Added | uuid = {}", uuid);
 
             tokio::spawn(Invoker::take_submission(invoker.clone(), server.clone()));
 
             Ok(tokio::spawn(Invoker::message_handler(invoker.clone(), server.clone())))
         } else {
-            log::info!("invoker: doesn't sended TOKEN message");
+            log::info!("invoker: didn't send TOKEN message");
 
             Err("Invoker conntected, but don't send TOKEN message first.".to_string())
         }
     }
     pub async fn new_submission(server: Arc<Mutex<Server>>, submission: Submission) -> Result<(), String> {
         let submission_uuid = submission.uuid;
+        let tests_count = submission.tests_count;
         {
             let mut server_locked = server.lock().await;
-            server_locked.tests_results.insert(submission_uuid, Vec::with_capacity(submission.tests_count as usize));
+            server_locked.tests_results.insert(submission_uuid, vec![TestResult::new(); tests_count as usize]);
         }
         let submissions_pool_sender = server.lock().await.submissions_pool_sender.clone();
         if let Err(error) = submissions_pool_sender.lock().await.send(submission).await {
@@ -136,6 +142,7 @@ impl Server {
             }
             return Err(error.to_string());
         }
+        log::info!("New submission added to queue | uuid = {} | tests_count = {}", submission_uuid, tests_count);
         Ok(())
     }
 }

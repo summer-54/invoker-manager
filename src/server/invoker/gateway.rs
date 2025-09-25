@@ -8,7 +8,6 @@ use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 pub struct Gateway;
 
 impl Gateway {
-
     pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
         writer.write_binary(message.parse_to()).await?;
         Ok(())
@@ -37,7 +36,7 @@ impl Gateway {
         };
         log::info!("Data readed from socket");
         let message = InputMessage::parse_from(data)?;
-        log::info!("Data from socket parsed | message = {:?}", message);
+        log::info!("Data from socket parsed");
         Ok(message)
     }
     pub fn to_vec_u8(bytes: Vec<u8>) -> Result<Vec<u8>, String> {

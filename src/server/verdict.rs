@@ -16,6 +16,7 @@ pub enum Verdict {
     CE,
     SL,
     UV,
+    SK,
 }
 
 impl Verdict {
@@ -29,6 +30,7 @@ impl Verdict {
             "RE" => Self::RE,
             "ML" => Self::ML,
             "SL" => Self::SL,
+            "SK" => Self::SK,
                _ => Self::UV,
         }
     }
@@ -44,11 +46,19 @@ impl Verdict {
             Self::ML => "ML",
             Self::TE => "TE",
             Self::CE => "CE",
+            Self::SK => "SK",
         }.to_string()
     }
 }
 
 impl TestResult {
+    pub fn new() -> Self {
+        Self {
+            verdict: Verdict::SK,
+            time: 0.0,
+            memory: 0,
+        }
+    }
     pub fn parse_to(&self) -> String {
         format!("{} {} {}", self.verdict.parse_to(), self.time, self.memory).to_string()
     }
