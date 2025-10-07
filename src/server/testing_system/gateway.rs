@@ -28,6 +28,9 @@ impl Gateway { // wrong protocol
 
     pub async fn send_message(socket: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
         socket.write_binary(message.parse_to()).await?;
+        if let OutputMessage::SubmissionVerdict { .. } = message {
+            log::info!("SubmissionVerdict message sent | = {:?}", String::from_utf8(message.parse_to()));
+        }
         Ok(())
     }
 }

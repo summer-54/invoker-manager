@@ -95,6 +95,7 @@ impl Invoker {
                     return Ok(exit_code);
                 },
                 InputMessage::Verdict { verdict, message } => {
+                    //log::info!("Working on VERDICT message from invoker | verdict = {:?} | message = {:?}", verdict, message);
                     let Some(submission_uuid) = invoker.lock().await.submission_uuid else {
                         log::error!("invoker_side: Invoker send VERDICT message, before taking submission");
                         continue 'lp;
