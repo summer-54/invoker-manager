@@ -8,7 +8,7 @@ use gateway::{Gateway, InputMessage, OutputMessage};
 use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
 
-use super::{verdict::{TestResult, Verdict}, Server};
+use super::{verdict::{TestResult, Verdict}, Server, TestingSystemSide};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
@@ -46,7 +46,7 @@ impl TestingSystem {
                     }
                     match message {
                         InputMessage::SubmissionRun { submission } => {
-                            tokio::spawn(Server::new_submission(server.clone(), submission));
+                            tokio::spawn(TestingSystemSide::add_submission(server.clone(), submission));
                         },
                     }
                 },

@@ -52,7 +52,7 @@ impl Invoker {
                 return Err("LITTLE ERROR".to_string());
             };
             Some(Submission::new(uuid::Uuid::from_u128(12313u128), v, 3))*/ 
-            let submissions_pool_receiver_cloned = server.lock().await.submissions_pool_receiver.clone();
+            let submissions_pool_receiver_cloned = server.lock().await.invokers_side.submissions_pool_receiver.clone();
             let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
             submissions_pool_receiver.recv().await
         };
@@ -109,7 +109,7 @@ impl Invoker {
 
                             Vec::new()
                         });
-                        let Some(testing_system) = server.lock().await.testing_system.clone() else {
+                        let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() else {
                             log::error!("invoker_handler: Recieved verdict message, but testing_systeem didn't connect. | invoker_uuid = {:?}", invoker_uuid);
 
                             return;
@@ -135,7 +135,7 @@ impl Invoker {
 
                                 return;
                             };
-                            let Some(testing_system) = server.lock().await.testing_system.clone() else {
+                            let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() else {
                                 log::error!("invoker_handler: Recieved test verdict message, but testing_systeem didn't connect. | invoker_uuid = {:?}", invoker_uuid);
 
                                 return;
