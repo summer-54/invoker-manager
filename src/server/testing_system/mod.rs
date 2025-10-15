@@ -41,7 +41,8 @@ impl TestingSystem {
         'lp: loop {
             match Gateway::read_message_from(&mut reader_locked).await {
                 Ok(message) => {
-                    if let InputMessage::SubmissionRun{submission} = message.clone() {
+                    {
+                        let InputMessage::SubmissionRun{submission} = message.clone();
                         log::info!("testing_system_side: Recieved a message | message = {:?}", submission.uuid);
                     }
                     match message {

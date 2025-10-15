@@ -39,15 +39,6 @@ impl Gateway {
         log::info!("Data from socket parsed");
         Ok(message)
     }
-    pub fn to_vec_u8(bytes: Vec<u8>) -> Result<Vec<u8>, String> {
-        // TRIM()
-        let Ok(string) = String::from_utf8(bytes) else {
-            log::error!("Bytes couldn't be parsed to string");
-
-            return Err("Bytes couldn't be parsed to string".to_string());
-        };
-        Ok(string.lines().map(|line| {u8::from_str(line).unwrap_or(0)}).collect())
-    }
 
     pub fn parse_headers(bytes: Vec<u8>) -> (HashMap<String, String>, Vec<u8>) {
         let mut data = &bytes[..];

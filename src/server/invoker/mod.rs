@@ -70,7 +70,7 @@ impl Invoker {
         }
     }
 
-    pub async fn finish_current_submission(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) {
+    pub async fn finish_current_submission(invoker: Arc<Mutex<Self>>) {
         invoker.lock().await.submission_uuid = None;
     }
 
@@ -116,7 +116,7 @@ impl Invoker {
                         };
                         tokio::spawn(testing_system::TestingSystem::send_submission_verdict(testing_system, verdict, submission_uuid, test_results, message));
 
-                        Self::finish_current_submission(invoker.clone(), server.clone()).await;
+                        Self::finish_current_submission(invoker.clone()).await;
                         match Self::take_submission(invoker.clone(), server.clone()).await {
                             Ok(Some(uuid)) => log::info!("Invoker taked new submission after completing previous | uuid = {:?} | submission_uuid = {:?}", invoker_uuid, uuid),
                             Ok(None) => log::info!("Invoker didn't take new submission after completing previous | uuid = {:?}", invoker_uuid),
