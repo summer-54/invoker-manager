@@ -22,7 +22,7 @@ impl TestingSystemSide {
         let testing_system = match TestingSystem::connect_to(ip, url).await {
             Ok(ts) => ts,
             Err(error) => {
-                log::error!("testing_system_side: Can't open connection to testing system side | error = {}", error.to_string());
+                log::error!("testing_system_side: Can't open connection to testing system side | error = {} | ip = {} | url = {}", error.to_string(), ip, url);
                 return Err("Can't open connection to testing system side".to_string());
             },
         };

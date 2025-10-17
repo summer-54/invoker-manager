@@ -22,7 +22,7 @@ async fn main() {
     let server_cl = server.clone();
     let ts_side = tokio::spawn(async move {
         log::info!("Testing system side started");
-        if let Err(err) =  TestingSystemSide::start(server_cl, &ts_address, &("ws://".to_string() + &ts_address + "/api/ws/setup")).await {
+        if let Err(err) =  TestingSystemSide::start(server_cl, &ts_address, &format!("ws://{ts_address}/api/ws/setup")).await {
             log::error!("Testing system side stoped with error | error = {}", err);
         };
     });
