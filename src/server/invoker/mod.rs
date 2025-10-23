@@ -126,6 +126,7 @@ impl Invoker {
                 }
                 InputMessage::TestVerdict { result, test, data } => {
                     {
+                        log::info!("Working on TEST_VERDICT message from invoker | result = {:?} | test = {:?} | data = {:?}", result, test, data);
                         let invoker = invoker.clone();
                         let server = server.clone();
                         let result = result.clone();
@@ -146,29 +147,23 @@ impl Invoker {
                     'bl : {
                         let invoker = invoker.clone();
                         let server = server.clone();
-                        //tokio::spawn(async move {
-                            log::warn!("A");
-                            let Some(submission_uuid) = invoker.lock().await.submission_uuid.clone() else {
-                                log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
+                        let Some(submission_uuid) = invoker.lock().await.submission_uuid.clone() else {
+                            log::error!("invoker_handler: Invoker sent test verdict, but hasn't current submission. | invoker_uuid: {:?}", invoker_uuid);
 
-                                break 'bl;
-                            };
-                            log::warn!("B");
-                            let mut server_locked = server.lock().await;
-                            let Some(tests_results) = server_locked.tests_results.get_mut(&submission_uuid) else {
-                                log::error!("invoker_handler: Invoke sent test verdict, tests result isn't predefinted | invoker_uuid: {:?}", invoker_uuid);
+                            break 'bl;
+                        };
+                        let mut server_locked = server.lock().await;
+                        let Some(tests_results) = server_locked.tests_results.get_mut(&submission_uuid) else {
+                            log::error!("invoker_handler: Invoke sent test verdict, tests result isn't predefinted | invoker_uuid: {:?}", invoker_uuid);
 
-                                break 'bl;
-                            };
-                            log::warn!("C");
-                            let Some(test_result) = tests_results.get_mut(test as usize - 1) else {
-                                log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {} | current map = {:?}", invoker_uuid, test - 1, tests_results.len(), submission_uuid, server_locked.tests_results);
+                            break 'bl;
+                        };
+                        let Some(test_result) = tests_results.get_mut(test as usize - 1) else {
+                            log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {} | current map = {:?}", invoker_uuid, test - 1, tests_results.len(), submission_uuid, server_locked.tests_results);
 
-                                break 'bl;
-                            };
-                            log::warn!("D");
-                            *test_result = result;
-                        //});
+                            break 'bl;
+                        };
+                        *test_result = result;
                     }
                 },
                 InputMessage::Error { message } => {
