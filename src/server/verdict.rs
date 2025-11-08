@@ -12,11 +12,12 @@ pub enum Verdict {
     TL,
     RE,
     ML,
-    TE,
+    TE, // Testing Error
     CE,
-    SL,
+    SL, // ?
+    SK, // Skipped
+    PE, 
     UV,
-    SK,
 }
 
 impl Verdict {
@@ -31,6 +32,7 @@ impl Verdict {
             "ML" => Self::ML,
             "SL" => Self::SL,
             "SK" => Self::SK,
+            "PE" => Self::PE,
                _ => Self::UV,
         }
     }
@@ -47,6 +49,7 @@ impl Verdict {
             Self::TE => "TE",
             Self::CE => "CE",
             Self::SK => "SK",
+            Self::PE => "PE",
         }.to_string()
     }
 }
