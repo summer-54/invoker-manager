@@ -81,7 +81,15 @@ impl InvokersSide {
 
             tokio::spawn(Invoker::take_submission(invoker.clone(), server.clone()));
 
-            Ok(tokio::spawn(Invoker::message_handler(invoker.clone(), server.clone())))
+            Ok(tokio::spawn(async move {
+                let result = Invoker::message_handler(invoker.clone(), server.clone()).await;
+                {
+                    let mut server_locked = server.lock().await;
+                    server_locked.invokers_side.invokers.remove(&uuid);
+                }
+                log::trace!("invoker_side: Removed | uuid = {}", uuid);
+                result
+            }))
         } else {
             log::error!("invoker_side: Didn't send TOKEN message");
 

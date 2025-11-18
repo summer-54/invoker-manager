@@ -29,6 +29,10 @@ impl Invoker {
         }
     }
 
+    pub fn get_submission_uuid(&self) -> Option<Uuid> {
+        self.submission_uuid
+    }
+
     pub async fn run_submission(invoker_locked: &mut Invoker, submission: Submission) {
         invoker_locked.submission_uuid = Some(submission.uuid);
         let writer = invoker_locked.writer.clone();

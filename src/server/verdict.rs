@@ -20,9 +20,9 @@ pub enum Verdict {
     UV,
 }
 
-impl Verdict {
-    pub fn parse(verdict: &String) -> Self {
-        match verdict.as_str() {
+impl From<&String> for Verdict {
+    fn from(value: &String) -> Self {
+        match value.as_str() {
             "OK" => Self::OK,
             "CE" => Self::CE,
             "TE" => Self::TE,
@@ -36,20 +36,22 @@ impl Verdict {
                _ => Self::UV,
         }
     }
+}
 
-    pub fn parse_to(&self) -> String {
-        match self {
-            Self::OK => "OK",
-            Self::UV => "UV",
-            Self::SL => "SL",
-            Self::WA => "WA",
-            Self::TL => "TL",
-            Self::RE => "RE",
-            Self::ML => "ML",
-            Self::TE => "TE",
-            Self::CE => "CE",
-            Self::SK => "SK",
-            Self::PE => "PE",
+impl From<Verdict> for String {
+    fn from(value: Verdict) -> Self {
+        match value {
+            Verdict::OK => "OK",
+            Verdict::UV => "UV",
+            Verdict::SL => "SL",
+            Verdict::WA => "WA",
+            Verdict::TL => "TL",
+            Verdict::RE => "RE",
+            Verdict::ML => "ML",
+            Verdict::TE => "TE",
+            Verdict::CE => "CE",
+            Verdict::SK => "SK",
+            Verdict::PE => "PE",
         }.to_string()
     }
 }
@@ -62,7 +64,11 @@ impl TestResult {
             memory: 0,
         }
     }
-    pub fn parse_to(&self) -> String {
-        format!("{} {} {}", self.verdict.parse_to(), self.time, self.memory).to_string()
+}
+
+impl From<TestResult> for String {
+    fn from(value: TestResult) -> String {
+        let verdict: String = value.verdict.clone().into();
+        format!("{} {} {}", verdict, value.time, value.memory).to_string()
     }
 }

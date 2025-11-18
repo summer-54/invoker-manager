@@ -9,7 +9,7 @@ pub struct Gateway;
 
 impl Gateway {
     pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
-        writer.write_binary(message.parse_to()).await?;
+        writer.write_binary::<Vec<u8>>(message.into()).await?;
         Ok(())
     }
 
@@ -35,7 +35,7 @@ impl Gateway {
             return Err("Couldn't read data from socket".to_string());
         };
         log::info!("Data readed from socket");
-        let message = InputMessage::parse_from(data)?;
+        let message = data.try_into()?;
         log::info!("Data from socket parsed");
         Ok(message)
     }
@@ -95,8 +95,9 @@ pub enum OutputMessage {
     CloseInvoker,
 }
 
-impl InputMessage {
-    fn parse_from(bytes: Vec<u8>) -> Result<Self, String> {
+impl TryFrom<Vec<u8>> for InputMessage {
+    type Error = String;
+    fn try_from(bytes: Vec<u8>) -> Result<Self, String> {
         let (headers, data) = Gateway::parse_headers(bytes);
         let Some(message_type) = headers.get("TYPE") else {
             log::error!("Message doesn't contain TYPE header");
@@ -111,13 +112,13 @@ impl InputMessage {
                 })
             },
             "VERDICT" => {
-                let verdict = Verdict::parse(headers.get("NAME").unwrap_or(&"UV".to_string()));
+                let verdict = Verdict::from(headers.get("NAME").unwrap_or(&"UV".to_string()));
                 if let Verdict::UV = verdict {
                     log::error!("Readed UV verdict | headers = {:?} | data = {:?}", headers, data);
                 }
                 if let Verdict::OK = verdict {
                     let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
-                    let points = headers.get("GROUPS").cloned().unwrap_or("0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
+                    let points = headers.get("GROUPS").unwrap_or(&"0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
                     Ok(InputMessage::Verdict {
                         verdict,
                         message: Ok((sum, points)),
@@ -132,7 +133,7 @@ impl InputMessage {
             },
             "TEST" => {
                 let test: u16 = headers.get("ID").map_or(1, |v| u16::from_str(v).unwrap_or(1));
-                let verdict = Verdict::parse(&headers.get("VERDICT").cloned().unwrap_or("UV".to_string()));
+                let verdict = Verdict::from(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
                 let time: f64 = headers.get("TIME").map_or(0.0, |v| f64::from_str(v).unwrap_or(0.0));
                 let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
                 Ok(InputMessage::TestVerdict {
@@ -170,8 +171,8 @@ impl InputMessage {
     }
 }
 
-impl OutputMessage {
-    fn parse_to(&self) -> Vec<u8> {
+impl Into<Vec<u8>> for OutputMessage {
+    fn into(self) -> Vec<u8> {
         match self {
             Self::TestSubmission { submission } => {
                 let mut result = "TYPE START\nDATA\n".as_bytes().to_vec();

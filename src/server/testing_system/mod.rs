@@ -1,6 +1,6 @@
 pub mod gateway;
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
 use ratchet_deflate::{DeflateDecoder, DeflateEncoder, DeflateExtProvider};
@@ -41,14 +41,18 @@ impl TestingSystem {
         'lp: loop {
             match Gateway::read_message_from(&mut reader_locked).await {
                 Ok(message) => {
-                    {
-                        let InputMessage::SubmissionRun{submission} = message.clone();
-                        log::info!("testing_system_side: Recieved a message | message = {:?}", submission.uuid);
-                    }
                     match message {
                         InputMessage::SubmissionRun { submission } => {
+                            log::info!("testing_system_side: Recieved a message | message = {:?}", submission.uuid);
                             tokio::spawn(TestingSystemSide::add_submission(server.clone(), submission));
                         },
+                        InputMessage::InvokersStatus {  } => {
+                            tokio::spawn(async move {
+                                let invokers_tasks: HashMap<Uuid, Option<Uuid>> = TestingSystemSide::get_invokers_status(server.clone()).await;
+                                Self::send_invokers_status(testing_system.clone(), invokers_tasks).await;
+                            });
+                            todo!();
+                        }
                     }
                 },
                 Err(err) => {
@@ -73,6 +77,17 @@ impl TestingSystem {
         let mut writer = writer.lock().await;
         if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::TestVerdict{
             result, submission_uuid, test, data
+        }).await {
+            log::error!("Couldn't send message | error = {}", err);
+        } else {
+            log::info!("testing_system: TestVerdict message sent");
+        }
+    }
+    pub async fn send_invokers_status(testing_system: Arc<Mutex<Self>>, invokers_tasks: HashMap<Uuid, Option<Uuid>>) {
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer = writer.lock().await;
+        if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::InvokersStatus{
+            invokers_tasks
         }).await {
             log::error!("Couldn't send message | error = {}", err);
         } else {
