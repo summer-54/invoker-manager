@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bytes::BytesMut;
 use uuid::Uuid;
 use ratchet_rs::{Error};

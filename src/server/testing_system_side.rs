@@ -1,6 +1,4 @@
 use tokio::sync::{mpsc, Mutex};
-use uuid::Uuid;
-use std::collections::HashMap;
 use std::sync::Arc;
 use crate::server::testing_system::TestingSystem;
 use super::Server;
@@ -65,15 +63,5 @@ impl TestingSystemSide {
         }
         log::trace!("New submission added to queue | uuid = {} | tests_count = {}", submission_uuid, tests_count);
         Ok(())
-    }
-
-    pub async fn get_invokers_status(server: Arc<Mutex<Server>>) -> HashMap<Uuid, Option<Uuid>> {
-        let invokers = server.lock().await.invokers_side.invokers.clone();
-        let mut invokers_tasks = HashMap::<Uuid, Option<Uuid>>::new();
-        for (uuid, invoker) in invokers {
-            let invoker = invoker.lock().await;
-            invokers_tasks.insert(uuid, invoker.get_submission_uuid());
-        }
-        invokers_tasks
     }
 }

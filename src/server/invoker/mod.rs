@@ -119,6 +119,11 @@ impl Invoker {
                             return;
                         };
                         tokio::spawn(testing_system::TestingSystem::send_submission_verdict(testing_system, verdict, submission_uuid, test_results, message));
+                        if let Some(submission_uuid) = invoker.lock().await.submission_uuid.clone() { 
+                            let _ = Server::remove_tests_result(server.clone(), submission_uuid);
+                        } else {
+                            log::error!("Something went wrong, and `submission_uuid` of `Invoker` is set to None, but submission was finished.");
+                        }
 
                         Self::finish_current_submission(invoker.clone()).await;
                         match Self::take_submission(invoker.clone(), server.clone()).await {

@@ -1,11 +1,15 @@
+use serde::Serialize;
+
 #[derive(Debug, Clone)]
+#[derive(Serialize)]
 pub struct TestResult {
     pub verdict: Verdict,
-    pub time: f64,
+    pub time: f32,
     pub memory: u32,
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize)]
 pub enum Verdict {
     OK,
     WA,

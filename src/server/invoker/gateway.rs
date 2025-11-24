@@ -134,7 +134,7 @@ impl TryFrom<Vec<u8>> for InputMessage {
             "TEST" => {
                 let test: u16 = headers.get("ID").map_or(1, |v| u16::from_str(v).unwrap_or(1));
                 let verdict = Verdict::from(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
-                let time: f64 = headers.get("TIME").map_or(0.0, |v| f64::from_str(v).unwrap_or(0.0));
+                let time: f32 = headers.get("TIME").map_or(0.0, |v| f32::from_str(v).unwrap_or(0.0));
                 let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
                 Ok(InputMessage::TestVerdict {
                     result: TestResult {

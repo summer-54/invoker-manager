@@ -31,5 +31,9 @@ impl Server {
             tests_results: HashMap::new(),
         }))
     }
+
+    async fn remove_tests_result(server: Arc<Mutex<Server>>, uuid: Uuid) -> Option<Vec<TestResult>> {
+        server.lock().await.tests_results.remove(&uuid)
+    }
 }
 

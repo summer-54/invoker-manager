@@ -1,6 +1,6 @@
 pub mod gateway;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
 use ratchet_deflate::{DeflateDecoder, DeflateEncoder, DeflateExtProvider};

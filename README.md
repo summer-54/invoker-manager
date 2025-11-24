@@ -62,17 +62,17 @@ DATA
 
 ## Verdicts
 
-Standart verdicts and new one - SK = Skipped
+Standart verdicts and new one -- SK = Skipped
+You can  it in [invoker repository](https://github.com/summer-54/invoker).
 
 ## Control-panel
 
-### /control-panel/invokers-status
+### GET -> /control-panel/invokers-status
 Gets list of invokers and which submission they are testing.
 
 ```bash
-$ curl 127.0.0.1:3333/control-panel/invokers-status
+$ curl ${CP_ADDRESS}/control-panel/invokers-status
 ```
-
 
 ```
 {
@@ -82,4 +82,25 @@ $ curl 127.0.0.1:3333/control-panel/invokers-status
 }
 ```
 
-You can find it in [invoker repository](https://github.com/summer-54/invoker).
+### GET -> /control-panel/tests-results
+Gets tests results of currently testing submissions
+
+```bash
+$ curl ${CP_ADDRESS}/control-panel/invokers-status
+```
+
+```
+{
+    ...
+    <submission uuid [Uuid]> : [
+        ...
+        {
+            verdict: <test verdict [string | Verdict]>,
+            time: <used time on test [f32 | seconds]>,
+            memory: <used memory on test [u32 | bytes]>,
+        },
+        ...
+    ]
+    ...
+}
+```
