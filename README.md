@@ -4,7 +4,7 @@ Server tool which keeps connections to invokers and distribute submissions betwe
 ## Run in container
 ```bash
 podman build -t localhost/invoker-manager .
-podman run -d -e INVOKERS_ADDRESS=0.0.0.0:1111 -e TS_ADDRESS=0.0.0.0:2222 -p 1111:1111 -p 2222:2222 docker.io/a1exeyy/invoker-manager
+podman run -d -e INVOKERS_ADDRESS=0.0.0.0:1111 -e TS_ADDRESS=0.0.0.0:2222 -e CP_ADDRESS=0.0.0.0:3333 -p 1111:1111 -p 2222:2222 -p 3333:3333 docker.io/a1exeyy/invoker-manager
 ```
 
 ## invoker-manager → testing-system
@@ -60,8 +60,26 @@ DATA
 ```
 ## invoker-manager ←→ invoker
 
-## verdicts
+## Verdicts
 
 Standart verdicts and new one - SK = Skipped
+
+## Control-panel
+
+### /control-panel/invokers-status
+Gets list of invokers and which submission they are testing.
+
+```bash
+$ curl 127.0.0.1:3333/control-panel/invokers-status
+```
+
+
+```
+{
+    ...
+    <invoker uuid [Uuid]> : <[None]> | <submission uuid [Uuid]> 
+    ...
+}
+```
 
 You can find it in [invoker repository](https://github.com/summer-54/invoker).

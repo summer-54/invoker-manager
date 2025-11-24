@@ -96,5 +96,12 @@ impl InvokersSide {
             Err("Invoker conntected, but don't send TOKEN message first.".to_string())
         }
     }
-
+    pub async fn get_invokers_status(&self) -> HashMap<Uuid, Option<Uuid>> {
+        let invokers_side = self.invokers.clone();
+        let mut map = HashMap::new();
+        for (uuid, invoker) in invokers_side {
+            map.insert(uuid, invoker.lock().await.get_submission_uuid());
+        }
+        map
+    }
 }

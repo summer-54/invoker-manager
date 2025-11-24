@@ -22,10 +22,14 @@ impl Gateway { // wrong protocol
         }
     }
 
-    pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, Error> {
-        let data = Self::read_data_from(socket).await?;
-        let message = InputMessage::parse(data)?;
-        Ok(message)
+    pub async fn read_message_from(socket: &mut WSReader) -> Result<InputMessage, String> {
+        let data = match Self::read_data_from(socket).await {
+            Ok(data) => data,
+            Err(err) => {
+                return Err(format!("Can't read message from ts {:?}", err));
+            }
+        };
+        data.try_into()
     }
 
     pub async fn send_message(socket: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
@@ -41,8 +45,6 @@ impl Gateway { // wrong protocol
 pub enum InputMessage {
     SubmissionRun {
         submission: Submission,
-    },
-    InvokersStatus {
     },
 }
 
@@ -60,13 +62,11 @@ pub enum OutputMessage {
         tests_result: Vec<TestResult>,
         message: Result<(u8, Vec<u8>), String>,
     },
-    InvokersStatus {
-        invokers_tasks: HashMap<Uuid, Option<Uuid>>,
-    },
 }
 
-impl InputMessage {
-    fn parse(bytes: Vec<u8>) -> Result<Self, Error> {
+impl TryFrom<Vec<u8>> for InputMessage {
+    type Error = String;
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
         let data_uuid: [u8; 16] = bytes[0..16].try_into().unwrap_or([0u8; 16]);
         let uuid = Uuid::from_bytes(data_uuid);
         let test_count = u16::from_be_bytes(bytes[16..18].try_into().unwrap_or([0u8; 2]));
@@ -103,16 +103,7 @@ impl From<OutputMessage> for Vec<u8> {
                     }
                 }
             },
-            OutputMessage::InvokersStatus { invokers_tasks } => {
-                let mut result: Vec<u8> = format!("TYPE INVOKERS_STATUS\nDATA\n").bytes().collect();
-                for (invoker_uuid, task_uuid) in invokers_tasks {
-                    result.append(&mut invoker_uuid.into_bytes().to_vec());
-                    result.append(&mut task_uuid.unwrap_or(Uuid::nil()).into_bytes().to_vec());
-                }
-                result
-            }
         }
-
     }
 }
 

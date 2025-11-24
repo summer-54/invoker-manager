@@ -11,4 +11,7 @@ bytes = { version = "*" }
 uuid = { version = "*" }
 rand = { version = "*" }
 env_logger = { version = "*" }
+axum = { version = "*" }
 log = { version = "*" }
+serde = { version = "*" }
+serde_json = { version = "*" }

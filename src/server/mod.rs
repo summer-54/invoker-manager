@@ -1,5 +1,6 @@
 mod testing_system;
 mod invoker;
+pub mod control_panel;
 pub mod verdict;
 pub mod submission;
 pub mod invokers_side;
