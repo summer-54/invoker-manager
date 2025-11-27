@@ -63,7 +63,7 @@ DATA
 ## Verdicts
 
 Standart verdicts and new one -- SK = Skipped
-You can  it in [invoker repository](https://github.com/summer-54/invoker).
+You can find it in [invoker repository](https://github.com/summer-54/invoker).
 
 ## Control-panel
 
@@ -86,7 +86,7 @@ $ curl ${CP_ADDRESS}/control-panel/invokers-status
 Gets tests results of currently testing submissions
 
 ```bash
-$ curl ${CP_ADDRESS}/control-panel/invokers-status
+$ curl ${CP_ADDRESS}/control-panel/tests-results
 ```
 
 ```
@@ -104,3 +104,11 @@ $ curl ${CP_ADDRESS}/control-panel/invokers-status
     ...
 }
 ```
+
+### DELETE /control-panel/invokers/{invoker uuid} (IN PROGRESS)
+Dedlete invoker by invoker uuid
+
+```bash
+$ curl ${CP_ADDRESS}/control-panel/invokers/{uuid | xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx} -X DELETE
+```
+

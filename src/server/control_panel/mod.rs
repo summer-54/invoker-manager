@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use tokio::{net::TcpListener, sync::Mutex};
+use uuid::Uuid;
 use std::collections::HashMap;
-use axum::{extract::State, response::IntoResponse, routing::get, Router};
+use axum::{extract::{State, Path}, response::IntoResponse, routing::{get, delete}, Router};
 
-use super::{verdict::TestResult, Server};
+use super::{invokers_side::{self, InvokersSide}, verdict::TestResult, Server};
 
 pub struct ControlPanel {
     listener: TcpListener,
@@ -79,8 +80,23 @@ async fn get_tests_results_handler(State(server): State<Arc<Mutex<Server>>>) -> 
     }   
 }
 
+async fn delete_invoker_handler(Path(path): Path<String>, State(server): State<Arc<Mutex<Server>>>) -> impl IntoResponse {
+    let invoker_uuid = match Uuid::try_from(path) {
+        Ok(invoker_uuid) => invoker_uuid,
+        Err(_err) => {
+            return "{invoker_uuid} doesn't parse to uuid.".to_string();
+        }
+    };
+
+    if let Err(err) = InvokersSide::delete_invoker(server, invoker_uuid).await {
+        return err;
+    }
+    "Succes".to_string()
+}
+
 fn control_panel_handler() -> Router<Arc<Mutex<Server>>> {
     Router::<Arc<Mutex<Server>>>::new()
         .route("/invokers-status", get(get_invokers_status_handler))
         .route("/tests-results", get(get_tests_results_handler))
+        .route("/invokers/{invoker_uuid}", delete(delete_invoker_handler))
 }

@@ -83,10 +83,8 @@ impl InvokersSide {
 
             Ok(tokio::spawn(async move {
                 let result = Invoker::message_handler(invoker.clone(), server.clone()).await;
-                {
-                    let mut server_locked = server.lock().await;
-                    server_locked.invokers_side.invokers.remove(&uuid);
-                }
+                Invoker::delete(server, invoker).await?;
+
                 log::trace!("invoker_side: Removed | uuid = {}", uuid);
                 result
             }))
@@ -95,6 +93,19 @@ impl InvokersSide {
 
             Err("Invoker conntected, but don't send TOKEN message first.".to_string())
         }
+    }
+    pub async fn delete_invoker(server: Arc<Mutex<Server>>, uuid: Uuid) -> Result<(), String> {
+        let invoker = {
+            let server_locked = server.lock().await;
+            let Some(invoker) = server_locked.invokers_side.invokers.get(&uuid) else {
+                return Err(format!("Invoker {uuid} doesn't exist"));
+            };
+            invoker.clone()
+        };
+
+        tokio::spawn(Invoker::take_submission(invoker.clone(), server.clone()));
+        Invoker::delete(server.clone(), invoker.clone()).await?;
+        return Ok(());
     }
     pub async fn get_invokers_status(&self) -> HashMap<Uuid, Option<Uuid>> {
         let invokers_side = self.invokers.clone();
