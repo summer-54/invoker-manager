@@ -3,6 +3,9 @@ mod server;
 use std::env;
 use server::{Server, invokers_side::InvokersSide, testing_system_side::TestingSystemSide, control_panel::ControlPanel};
 
+pub const MAX_MESSAGE_SIZE: usize = 1 << 31;
+pub const COMPRESSION_LEVEL: u32 = 64 * 1024 * 1024;
+
 #[tokio::main]
 async fn main() {
     env_logger::init();

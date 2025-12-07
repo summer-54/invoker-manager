@@ -2,11 +2,13 @@ pub mod gateway;
 
 use std::{sync::Arc, time::Duration};
 
-use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
-use ratchet_deflate::{DeflateDecoder, DeflateEncoder, DeflateExtProvider};
+use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig, UpgradedClient};
+use ratchet_deflate::{Compression, DeflateConfig, DeflateDecoder, DeflateEncoder, DeflateExtProvider};
 use gateway::{Gateway, InputMessage, OutputMessage};
 use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
+
+use crate::{COMPRESSION_LEVEL, MAX_MESSAGE_SIZE};
 
 use super::{verdict::{TestResult, Verdict}, Server, TestingSystemSide};
 
@@ -21,7 +23,20 @@ pub struct TestingSystem {
 impl TestingSystem {
     pub async fn connect_to(ip: &str, url: &str) -> Result<Self, Error> {
         let stream = TcpStream::connect(ip).await?;
-        let socket = ratchet_rs::subscribe_with(WebSocketConfig::default(), stream, url, DeflateExtProvider::default(), SubprotocolRegistry::default()).await?.into_websocket();
+        let socket = ratchet_rs::subscribe_with(
+            WebSocketConfig {
+                max_message_size: MAX_MESSAGE_SIZE,    // 64MB максимальный размер сообщения
+            },
+            stream, url,
+            DeflateExtProvider::with_config(
+                DeflateConfig {
+                    compression_level: Compression::new(COMPRESSION_LEVEL),
+                    ..Default::default()
+                }
+            ),
+            SubprotocolRegistry::default()
+        ).await?.into_websocket();
+
         let (writer, reader) = socket.split()?;
 
         log::info!("testing_system_side: Connected to tssystem");

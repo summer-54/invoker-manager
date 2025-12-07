@@ -1,8 +1,8 @@
 use tokio::{net::{TcpListener, TcpStream}, sync::{mpsc, Mutex}, task::JoinHandle};
 use std::{collections::HashMap, sync::Arc};
 use ratchet_rs::{SubprotocolRegistry, WebSocketConfig, WebSocket};
-use ratchet_deflate::{Deflate, DeflateConfig, DeflateExtProvider};
-use crate::server::invoker::Invoker;
+use ratchet_deflate::{Compression, Deflate, DeflateConfig, DeflateExtProvider};
+use crate::{server::invoker::Invoker, COMPRESSION_LEVEL, MAX_MESSAGE_SIZE};
 use super::invoker::gateway::Gateway as InvokerGateway;
 use super::invoker::gateway::InputMessage as InvokerInMessage;
 use uuid::Uuid;
@@ -34,7 +34,16 @@ impl InvokersSide {
         loop {
             if let Ok((connection, address)) = listener.accept().await {
                 log::trace!("invoker_side: Finded connection | address = {}", address);
-                match ratchet_rs::accept_with(connection, WebSocketConfig::default(), DeflateExtProvider::with_config(DeflateConfig::default()), SubprotocolRegistry::default()).await {
+                match ratchet_rs::accept_with(connection,
+                    WebSocketConfig {
+                        max_message_size: MAX_MESSAGE_SIZE,
+                    },
+                    DeflateExtProvider::with_config(DeflateConfig {
+                        compression_level: Compression::new(COMPRESSION_LEVEL),
+                        ..Default::default()
+                    }),
+                    SubprotocolRegistry::default()
+                ).await {
                     Ok(stream) => {
                         log::trace!("invoker_side: Found new invoker");
                         let server = server.clone();
