@@ -15,3 +15,4 @@ axum = { version = "*" }
 log = { version = "*" }
 serde = { version = "*" }
 serde_json = { version = "*" }
+invoker_auth = { git = "https://github.com/summer-54/invoker_auth.git" }

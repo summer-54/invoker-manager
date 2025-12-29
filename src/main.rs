@@ -13,6 +13,7 @@ async fn main() {
     let inv_address: String = env::var("INVOKERS_ADDRESS").unwrap_or("127.0.0.1:1111".to_string());
     let ts_address: String = env::var("TS_ADDRESS").unwrap_or("127.0.0.1:2222".to_string());
     let cp_address: String = env::var("CP_ADDRESS").unwrap_or("127.0.0.1:3333".to_string());
+
     let server = Server::new();
     log::info!("Server created");
     let inv_side = {
