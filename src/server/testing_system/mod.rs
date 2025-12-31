@@ -1,16 +1,15 @@
 pub mod gateway;
+pub use gateway::{Gateway, InputMessage, OutputMessage};
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig, UpgradedClient};
+use ratchet_rs::{Error, Receiver, Sender, SubprotocolRegistry, WebSocketConfig};
 use ratchet_deflate::{Compression, DeflateConfig, DeflateDecoder, DeflateEncoder, DeflateExtProvider};
-use gateway::{Gateway, InputMessage, OutputMessage};
 use tokio::{net::TcpStream, sync::Mutex};
-use uuid::Uuid;
 
 use crate::{COMPRESSION_LEVEL, MAX_MESSAGE_SIZE};
 
-use super::{verdict::{TestResult, Verdict}, Server, TestingSystemSide};
+use super::{Server, TestingSystemSide};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
@@ -68,35 +67,6 @@ impl TestingSystem {
                     break 'lp Err("testing system sent wrong message".to_string());
                 }
             }
-        }
-    }
-    pub async fn send_submission_verdict(testing_system: Arc<Mutex<Self>>, verdict: Verdict, submission_uuid: Uuid, tests_result: Vec<TestResult>, message: Result<(u8, Vec<u8>), String>) {
-        let writer = testing_system.lock().await.writer.clone();
-        let mut writer = writer.lock().await;
-        if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::SubmissionVerdict{ verdict, submission_uuid, tests_result, message,
-        }).await {
-            log::error!("Couldn't send message | error = {}", err);
-        } else {
-            log::info!("testing_system: SubmissionVerdict message sent");
-        }
-    }
-    pub async fn send_test_verdict(testing_system: Arc<Mutex<Self>>, result: TestResult, test: u16, data: Vec<u8>, submission_uuid: Uuid) {
-        let writer = testing_system.lock().await.writer.clone();
-        let mut writer = writer.lock().await;
-        if let Err(err) = Gateway::send_message(&mut writer, OutputMessage::TestVerdict{
-            result, submission_uuid, test, data
-        }).await {
-            log::error!("Couldn't send message | error = {}", err);
-        } else {
-            log::info!("testing_system: TestVerdict message sent");
-        }
-    }
-    pub async fn pinger(testing_system: Arc<Mutex<Self>>) -> Result<(), Error> {
-        let mut interval = tokio::time::interval(Duration::from_secs(30));
-        loop {
-            interval.tick().await;
-            let sender = testing_system.lock().await.writer.clone();
-            sender.lock().await.write_ping([0u8; 0]).await?;
         }
     }
 }

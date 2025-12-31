@@ -1,7 +1,10 @@
 use bytes::BytesMut;
+use invoker_auth::{Cert, Parse};
 use uuid::Uuid;
-use ratchet_rs::{Error};
-use super::{WSReader, WSWriter};
+use std::{sync::Arc, time::Duration};
+use super::{WSReader, WSWriter, TestingSystem};
+use ratchet_rs::Error;
+use tokio::{sync::Mutex};
 use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 
@@ -30,12 +33,54 @@ impl Gateway { // wrong protocol
         data.try_into()
     }
 
-    pub async fn send_message(socket: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
-        socket.write_binary::<Vec<u8>>(message.clone().into()).await?;
+    pub async fn send_message_to(socket: &mut WSWriter, message: OutputMessage) -> Result<(), String> {
+        socket.write_binary::<Vec<u8>>(message.clone().into()).await.map_err(|err| err.to_string())?;
         if let OutputMessage::SubmissionVerdict { .. } = message {
             log::info!("SubmissionVerdict message sent | message = {:?}", message);
         }
         Ok(())
+    }
+    pub async fn send_submission_verdict(testing_system: Arc<Mutex<TestingSystem>>, verdict: Verdict, submission_uuid: Uuid, tests_result: Vec<TestResult>, message: Result<(u8, Vec<u8>), String>) {
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer = writer.lock().await;
+        if let Err(err) = Self::send_message_to(&mut writer, OutputMessage::SubmissionVerdict{ verdict, submission_uuid, tests_result, message,
+        }).await {
+            log::error!("Couldn't send message | error = {}", err);
+        } else {
+            log::info!("testing_system: SubmissionVerdict message sent");
+        }
+    }
+    pub async fn send_test_verdict(testing_system: Arc<Mutex<TestingSystem>>, result: TestResult, test: u16, data: Vec<u8>, submission_uuid: Uuid) {
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer = writer.lock().await;
+        if let Err(err) = Self::send_message_to(&mut writer, OutputMessage::TestVerdict{
+            result, submission_uuid, test, data
+        }).await {
+            log::error!("Couldn't send message | error = {}", err);
+        } else {
+            log::info!("testing_system: TestVerdict message sent");
+        }
+    }
+    pub async fn pinger(testing_system: Arc<Mutex<TestingSystem>>) -> Result<(), Error> {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            let sender = testing_system.lock().await.writer.clone();
+            sender.lock().await.write_ping([0u8; 0]).await?;
+        }
+    }
+    
+    pub async fn get_certificate_by_key(testing_system: Arc<Mutex<TestingSystem>>, key: &String) -> Result<Cert, String> {
+        return Ok(Cert::from_file("pub.key").map_err(|_| "Can't get certificate".to_string())?);
+
+        // Need work
+        let writer = testing_system.lock().await.writer.clone();
+        let mut writer_locked = writer.lock().await;
+        Self::send_message_to(&mut writer_locked, OutputMessage::GetCertificate {
+            key: key.clone(),
+        }).await?;
+        todo!();
+        Err(String::new())
     }
 }
 
@@ -59,6 +104,10 @@ pub enum OutputMessage {
         verdict: Verdict,
         tests_result: Vec<TestResult>,
         message: Result<(u8, Vec<u8>), String>,
+    },
+    // Maybe need delete
+    GetCertificate {
+        key: String,
     },
 }
 
@@ -100,6 +149,10 @@ impl From<OutputMessage> for Vec<u8> {
                         result
                     }
                 }
+            },
+            // Maybe need delete
+            OutputMessage::GetCertificate { key } => {
+                todo!();
             },
         }
     }

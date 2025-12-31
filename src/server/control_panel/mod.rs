@@ -1,11 +1,11 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use tokio::{net::TcpListener, sync::Mutex};
 use uuid::Uuid;
 use std::collections::HashMap;
 use axum::{extract::{State, Path}, response::IntoResponse, routing::{get, delete}, Router};
 
-use super::{invokers_side::{self, InvokersSide}, verdict::TestResult, Server};
+use super::{invokers_side::InvokersSide, verdict::TestResult, Server};
 
 pub struct ControlPanel {
     listener: TcpListener,

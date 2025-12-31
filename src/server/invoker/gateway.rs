@@ -1,15 +1,18 @@
+use invoker_auth::Challenge;
 use uuid::Uuid;
 use bytes::BytesMut;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use std::{collections::HashMap, str::{self, FromStr}};
-use super::{WSReader, WSWriter};
+use super::{WSReader, WSWriter, Invoker};
 use ratchet_rs::Error;
 use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 pub struct Gateway;
 
 impl Gateway {
-    pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), Error> {
-        writer.write_binary::<Vec<u8>>(message.into()).await?;
+    pub async fn send_message_to(writer: &mut WSWriter, message: OutputMessage) -> Result<(), String> {
+        writer.write_binary::<Vec<u8>>(message.into()).await.map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -59,12 +62,32 @@ impl Gateway {
         }
         (headers, data.to_vec())
     }
+
+    pub async fn send_auth_verdict(invoker: Arc<Mutex<Invoker>>, verdict: bool) -> Result<(), String> {
+        let writer_unlocked = invoker.lock().await.writer.clone();
+        let mut writer = writer_unlocked.lock().await;
+        Self::send_message_to(&mut writer, OutputMessage::AuthVerdict {
+            verdict,
+        }).await?;
+        Ok(())
+    }
+
+    pub async fn send_auth_challenge(invoker: Arc<Mutex<Invoker>>, challenge: &Challenge) -> Result<(), String> {
+        let writer_unlocked = invoker.lock().await.writer.clone();
+        let mut writer = writer_unlocked.lock().await;
+        Self::send_message_to(&mut writer, OutputMessage::Challenge(challenge.bytes().clone())).await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
 pub enum InputMessage {
+    SignedChallenge {
+        bytes: Box<[u8]>,
+    },
     Token {
         uuid: Uuid,
+        key: String,
     },
     Verdict {
         verdict: Verdict,
@@ -91,6 +114,10 @@ pub enum OutputMessage {
     TestSubmission {
         submission: Submission,
     },
+    AuthVerdict {
+        verdict: bool,
+    },
+    Challenge(Box<[u8]>),
     StopTesting,
     CloseInvoker,
 }
@@ -107,8 +134,10 @@ impl TryFrom<Vec<u8>> for InputMessage {
         match message_type.as_str() {
             "TOKEN" => {
                 let uuid = Uuid::from_str(headers.get("ID").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
+                let key = headers.get("KEY").map_or("", |s| s).to_string();
                 Ok(InputMessage::Token{
                     uuid,
+                    key,
                 })
             },
             "VERDICT" => {
@@ -166,6 +195,11 @@ impl TryFrom<Vec<u8>> for InputMessage {
                     message: operror
                 })
             },
+            "AUTH" => {
+                Ok(InputMessage::SignedChallenge{
+                    bytes: data.into(),
+                })
+            },
             &_ => Err("Can't parse message".to_string())
         }
     }
@@ -178,13 +212,28 @@ impl Into<Vec<u8>> for OutputMessage {
                 let mut result = "TYPE START\nDATA\n".as_bytes().to_vec();
                 result.append(&mut submission.data.clone());
                 result
-            }
+            },
             Self::StopTesting => {
                 let result = "TYPE STOP\n".as_bytes().to_vec();
                 result
-            }
+            },
             Self::CloseInvoker => {
                 let result = "TYPE CLOSE\n".as_bytes().to_vec();
+                result
+            },
+            Self::Challenge ( bytes ) => {
+                let mut result = "TYPE AUTH_CHALLENGE\n".as_bytes().to_vec();
+                result.append(&mut bytes.to_vec());
+                result
+            },
+            Self::AuthVerdict { verdict } => {
+                let result = format!("TYPE AUTH_VERDICT\nVERDICT {}\n", {
+                    if verdict == true {
+                        "APPROVED"
+                    } else {
+                        "DENIED"
+                    }
+                }).as_bytes().to_vec();
                 result
             }
         }

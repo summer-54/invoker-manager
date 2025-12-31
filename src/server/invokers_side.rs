@@ -80,8 +80,13 @@ impl InvokersSide {
         };
         log::trace!("invoker_side: Sent connect message");
 
-        if let InvokerInMessage::Token { uuid } = message {
-            let invoker = Arc::new(Mutex::new(Invoker::new(uuid, reader, writer)));
+        if let InvokerInMessage::Token { uuid, key } = message {
+            let invoker = Arc::new(Mutex::new(Invoker::new(uuid, key, reader, writer)));
+
+            // Need invoker authorisation
+            
+            Invoker::authorise(invoker.clone(), server.clone()).await?;
+
             {
                 let mut server_locked = server.lock().await;
                 server_locked.invokers_side.invokers.insert(uuid, invoker.clone());

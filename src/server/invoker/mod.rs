@@ -6,29 +6,63 @@ use ratchet_deflate::{DeflateDecoder, DeflateEncoder};
 use ratchet_rs::{Receiver, Sender};
 use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
-use gateway::{Gateway, InputMessage, OutputMessage};
+pub use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
+use invoker_auth::{policy, Challenge};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
 
 pub struct Invoker {
     uuid: Uuid,
+    key: String,
     writer: Arc<Mutex<WSWriter>>,
     reader: Arc<Mutex<WSReader>>,
     submission_uuid: Option<Uuid>,
 }
 
 impl Invoker {
-    pub fn new(uuid: Uuid, reader: WSReader, writer: WSWriter) -> Self {
+    pub fn new(uuid: Uuid, key: String, reader: WSReader, writer: WSWriter) -> Self {
         Self {
             uuid,
+            key,
             writer: Arc::new(Mutex::new(writer)),
             reader: Arc::new(Mutex::new(reader)),
             submission_uuid: None,
         }
     }
 
+    pub async fn authorise(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
+        let challenge = Challenge::generate(128, &mut rand::rng());
+        log::trace!("Sending authoriation challenge");
+
+        Gateway::send_auth_challenge(invoker.clone(), &challenge).await?;
+        log::trace!("Sended authoriation challenge");
+
+        let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() else {
+            return Err("Testing system hasn't connected yet".to_string());
+        };
+        // Getting certificate from testing system
+        let cert = testing_system::gateway::Gateway::get_certificate_by_key(testing_system, &invoker.lock().await.key).await?;
+        log::trace!("Gotten certificate of {}", invoker.lock().await.key);
+
+        let reader_unlocked = invoker.lock().await.reader.clone();
+        let mut reader = reader_unlocked.lock().await;
+        let signed_challenge = Gateway::read_message_from(&mut reader).await?;
+        log::trace!("Recieved signed_challenge message");
+
+        if let InputMessage::SignedChallenge { bytes } = signed_challenge {
+            if let Ok(()) = challenge.check_solution(&bytes, &cert, &policy::StandardPolicy::new()) {
+                Gateway::send_auth_verdict(invoker, true).await?;
+                Ok("Authorisation succeded".to_string())
+            } else {
+                Gateway::send_auth_verdict(invoker, false).await?;
+                Err("Checking authorisation solutinon failed".to_string())
+            }
+        } else {
+            Err("Wrong message after authorise".to_string())
+        }
+    }
 
     pub fn get_submission_uuid(&self) -> Option<Uuid> {
         self.submission_uuid
@@ -131,7 +165,7 @@ impl Invoker {
 
                             return;
                         };
-                        tokio::spawn(testing_system::TestingSystem::send_submission_verdict(testing_system, verdict, submission_uuid, test_results, message));
+                        tokio::spawn(testing_system::gateway::Gateway::send_submission_verdict(testing_system, verdict, submission_uuid, test_results, message));
 
                         Self::finish_current_submission(server.clone(), invoker.clone()).await;
                         match Self::take_submission(invoker.clone(), server.clone()).await {
@@ -158,7 +192,7 @@ impl Invoker {
 
                                 return;
                             };
-                            tokio::spawn(testing_system::TestingSystem::send_test_verdict(testing_system, result, test, data, submission_uuid));
+                            tokio::spawn(testing_system::gateway::Gateway::send_test_verdict(testing_system, result, test, data, submission_uuid));
                         });
                     }
                     'bl : {
