@@ -5,6 +5,7 @@ use server::{Server, invokers_side::InvokersSide, testing_system_side::TestingSy
 
 pub const MAX_MESSAGE_SIZE: usize = 1 << 31;
 pub const COMPRESSION_LEVEL: u32 = 9;
+pub const TS_API_IP: &str = "api.ts54.ru";
 
 #[tokio::main]
 async fn main() {

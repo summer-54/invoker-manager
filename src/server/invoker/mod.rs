@@ -8,7 +8,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
 pub use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
-use invoker_auth::{policy, Challenge};
+use invoker_auth::{policy, Cert, Challenge, Parse};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
@@ -44,12 +44,14 @@ impl Invoker {
         };
         // Getting certificate from testing system
         let cert = testing_system::gateway::Gateway::get_certificate_by_key(testing_system, &invoker.lock().await.key).await?;
+        // let cert = Cert::from_file("pub.key").map_err(|_| "Can't get certificate".to_string())?;
+
         log::trace!("Gotten certificate of {}", invoker.lock().await.key);
 
         let reader_unlocked = invoker.lock().await.reader.clone();
         let mut reader = reader_unlocked.lock().await;
         let signed_challenge = Gateway::read_message_from(&mut reader).await?;
-        log::trace!("Recieved signed_challenge message");
+        log::trace!("Recieved signed_challenge message: {:?}", signed_challenge);
 
         if let InputMessage::SignedChallenge { bytes } = signed_challenge {
             if let Ok(()) = challenge.check_solution(&bytes, &cert, &policy::StandardPolicy::new()) {

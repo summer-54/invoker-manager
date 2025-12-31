@@ -1,10 +1,13 @@
+use axum::http::{header, Request};
 use bytes::BytesMut;
 use invoker_auth::{Cert, Parse};
+use reqwest::StatusCode;
 use uuid::Uuid;
 use std::{sync::Arc, time::Duration};
 use super::{WSReader, WSWriter, TestingSystem};
 use ratchet_rs::Error;
 use tokio::{sync::Mutex};
+use crate::TS_API_IP;
 use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 
@@ -70,17 +73,11 @@ impl Gateway { // wrong protocol
         }
     }
     
-    pub async fn get_certificate_by_key(testing_system: Arc<Mutex<TestingSystem>>, key: &String) -> Result<Cert, String> {
-        return Ok(Cert::from_file("pub.key").map_err(|_| "Can't get certificate".to_string())?);
-
-        // Need work
-        let writer = testing_system.lock().await.writer.clone();
-        let mut writer_locked = writer.lock().await;
-        Self::send_message_to(&mut writer_locked, OutputMessage::GetCertificate {
-            key: key.clone(),
-        }).await?;
-        todo!();
-        Err(String::new())
+    pub async fn get_certificate_by_key(_testing_system: Arc<Mutex<TestingSystem>>, key: &String) -> Result<Cert, String> {
+        let response = reqwest::get(format!("https://{TS_API_IP}/getInvokerKey,{}", key))
+            .await.map_err(|e| e.to_string())?
+            .error_for_status().map_err(|e| e.to_string())?;
+        Cert::from_bytes(&response.bytes().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())
     }
 }
 

@@ -222,7 +222,7 @@ impl Into<Vec<u8>> for OutputMessage {
                 result
             },
             Self::Challenge ( bytes ) => {
-                let mut result = "TYPE AUTH_CHALLENGE\n".as_bytes().to_vec();
+                let mut result = "TYPE AUTH_CHALLENGE\nDATA\n".as_bytes().to_vec();
                 result.append(&mut bytes.to_vec());
                 result
             },
