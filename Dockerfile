@@ -8,7 +8,6 @@ COPY ./src ./src
 ENV RUST_LOG=invoker_manager=trace
 ENV INVOKERS_ADDRESS=0.0.0.0:1111
 ENV TS_ADDRESS=0.0.0.0:2222
-ENV API_ADDRESS=0.0.0.0/api
 ENV CP_ADDRESS=0.0.0.0:3333
 
 RUN ["cargo", "build", "--release"]

@@ -4,8 +4,10 @@ Server tool which keeps connections to invokers and distribute submissions betwe
 ## Run in container
 ```bash
 podman build -t localhost/invoker-manager .
-podman run -d -e INVOKERS_ADDRESS=0.0.0.0:1111 -e TS_ADDRESS=0.0.0.0:2222 -e CP_ADDRESS=0.0.0.0:3333 -e API_ADDRESS=0.0.0.0/api -p 1111:1111 -p 2222:2222 -p 3333:3333 docker.io/a1exeyy/invoker-manager
+podman run -d -e INVOKERS_ADDRESS=0.0.0.0:1111 -e TS_ADDRESS=0.0.0.0:2222 -e CP_ADDRESS=0.0.0.0:3333 -p 1111:1111 -p 2222:2222 -p 3333:3333 docker.io/a1exeyy/invoker-manager
 ```
+
+You can use `API_ADDRESS` enviroment variable to specify API address. By default it uses `<TS_ADDERSS>/api`.
 
 ## invoker-manager → testing-system
 ### Submission verdict
