@@ -17,6 +17,8 @@ INVOKERS_ADDRESS=0.0.0.0:1111 TS_ADDRESS=0.0.0.0:2222 CP_ADDRESS=0.0.0.0:3333 ./
  - [i] `TS_ADDRESS` - address of `testing system` where `invoker-manager` connects.
  - [i] `CP_ADDRESS` - address of `invoker-manager` where `control-panel` is hosting.
  - [?] `API_ADDRESS` - can be used to specify API address of `testing system`. By default it uses `<TS_ADDERSS>/api`.
+ - [?] `RUST_LOG=trace` - can be used to increase amount of logs. By default it logs only errors.
+ - [?] `RUST_BACKTRACE=1` - can be used to show backtrace after painc.
 
 ## invoker-manager → testing-system
 ### Submission verdict
