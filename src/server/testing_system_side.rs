@@ -18,11 +18,11 @@ impl TestingSystemSide {
             testing_system: None,
         }
     }
-    pub async fn start(server: Arc<Mutex<Server>>, ip: &str, url: &str) -> Result<(), String> {
-        let testing_system = match TestingSystem::connect_to(ip, url).await {
+    pub async fn start(server: Arc<Mutex<Server>>, ts_ip: &str, api_addr: &str, url: &str) -> Result<(), String> {
+        let testing_system = match TestingSystem::connect_to(ts_ip, api_addr, url).await {
             Ok(ts) => ts,
             Err(error) => {
-                log::error!("testing_system_side: Can't open connection to testing system side | error = {} | ip = {} | url = {}", error.to_string(), ip, url);
+                log::error!("testing_system_side: Can't open connection to testing system side | error = {} | ip = {} | url = {}", error.to_string(), ts_ip, url);
                 return Err("Can't open connection to testing system side".to_string());
             },
         };

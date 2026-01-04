@@ -5,7 +5,6 @@ use server::{Server, invokers_side::InvokersSide, testing_system_side::TestingSy
 
 pub const MAX_MESSAGE_SIZE: usize = 1 << 31;
 pub const COMPRESSION_LEVEL: u32 = 9;
-pub const TS_API_IP: &str = "api.ts54.ru";
 
 #[tokio::main]
 async fn main() {
@@ -13,6 +12,7 @@ async fn main() {
 
     let inv_address: String = env::var("INVOKERS_ADDRESS").unwrap_or("127.0.0.1:1111".to_string());
     let ts_address: String = env::var("TS_ADDRESS").unwrap_or("127.0.0.1:2222".to_string());
+    let api_address: String = env::var("API_ADDRESS").unwrap_or("127.0.0.1/api".to_string());
     let cp_address: String = env::var("CP_ADDRESS").unwrap_or("127.0.0.1:3333".to_string());
 
     let server = Server::new();
@@ -31,7 +31,7 @@ async fn main() {
         let server = server.clone();
         tokio::spawn(async move {
             log::info!("Testing system side started");
-            if let Err(err) =  TestingSystemSide::start(server, &ts_address, &format!("ws://{ts_address}/api/ws/setup")).await {
+            if let Err(err) =  TestingSystemSide::start(server, &ts_address, &api_address, &format!("ws://{ts_address}/api/ws/setup")).await {
                 log::error!("Testing system side stoped with error | error = {}", err);
             };
         })

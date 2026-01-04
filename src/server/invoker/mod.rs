@@ -8,7 +8,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
 pub use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
-use invoker_auth::{policy, Cert, Challenge, Parse};
+use invoker_auth::{policy, Challenge};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;

@@ -17,11 +17,12 @@ pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
 pub struct TestingSystem {
     writer: Arc<Mutex<WSWriter>>,
     reader: Arc<Mutex<WSReader>>,
+    api_address: String,
 }
 
 impl TestingSystem {
-    pub async fn connect_to(ip: &str, url: &str) -> Result<Self, Error> {
-        let stream = TcpStream::connect(ip).await?;
+    pub async fn connect_to(ts_ip: &str, api_addr: &str, url: &str) -> Result<Self, Error> {
+        let stream = TcpStream::connect(ts_ip).await?;
         let socket = ratchet_rs::subscribe_with(
             WebSocketConfig {
                 max_message_size: MAX_MESSAGE_SIZE,    // 64MB максимальный размер сообщения
@@ -39,12 +40,13 @@ impl TestingSystem {
         let (writer, reader) = socket.split()?;
 
         log::info!("testing_system_side: Connected to tssystem");
-        Ok(Self::new(reader, writer))
+        Ok(Self::new(reader, writer, api_addr.to_string()))
     }
-    pub fn new(reader: WSReader, writer: WSWriter) -> Self {
+    pub fn new(reader: WSReader, writer: WSWriter, api_address: String) -> Self {
         Self {
             writer: Arc::new(Mutex::new(writer)),
             reader: Arc::new(Mutex::new(reader)),
+            api_address,
         }
     }
     pub async fn message_handler(testing_system: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
