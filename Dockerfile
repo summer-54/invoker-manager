@@ -12,7 +12,6 @@ ENV CP_ADDRESS=0.0.0.0:3333
 ENV RUST_BACKTRACE=1
 
 RUN ["apt-get", "update"]
-
 RUN ["apt-get", "install", "clang", "--no-install-recommends", "-y"]
 
 RUN ["cargo", "build", "--release"]
