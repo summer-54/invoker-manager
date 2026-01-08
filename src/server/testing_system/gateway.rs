@@ -73,14 +73,15 @@ impl Gateway { // wrong protocol
     }
     
     pub async fn get_certificate_by_key(testing_system: Arc<Mutex<TestingSystem>>, key: &String) -> Result<Cert, String> {
+        log::trace!("Trying to get authorise key from api");
         let api_address = testing_system.lock().await.api_address.clone();
         let mut request = reqwest::Request::new(reqwest::Method::GET, Url::from_str(&format!("http://{api_address}/get_invoker_key")).map_err(|e| e.to_string())?);
-        let _ = request.headers_mut().insert("Authorization", HeaderValue::from_str(key).map_err(|e| e.to_string())?);
+        let _ = request.headers_mut().insert("Authorization", HeaderValue::from_str(key).map_err(|e| format!("Can't create header from str: {:?}", e))?);
         let client = reqwest::Client::new();
         let response = client.execute(request)
-            .await.map_err(|e| e.to_string())?
-            .error_for_status().map_err(|e| e.to_string())?;
-        Cert::from_bytes(&response.bytes().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+            .await.map_err(|e| format!("Can't execute request: {:?}", e))?
+            .error_for_status().map_err(|e| format!("Can't do error_for_status: {:?}", e))?;
+        Cert::from_bytes(&response.bytes().await.map_err(|e| format!("Can't get bytes: {:?}", e))?).map_err(|e| format!("Can't get cert from bytes {:?}", e))
     }
 }
 
