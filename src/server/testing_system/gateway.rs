@@ -58,7 +58,7 @@ impl Gateway { // wrong protocol
         if let Err(err) = Self::send_message_to(&mut writer, OutputMessage::TestVerdict{
             result, submission_uuid, test, data
         }).await {
-            log::error!("Couldn't send message | error = {}", err);
+            log::error!("Couldn't send message | error = {:?}", err);
         } else {
             log::info!("testing_system: TestVerdict message sent");
         }
