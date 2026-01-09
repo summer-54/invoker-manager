@@ -59,13 +59,13 @@ impl TestingSystem {
                 Ok(message) => {
                     match message {
                         InputMessage::SubmissionRun { submission } => {
-                            log::info!("testing_system_side: Recieved a message | message = {:?}", submission.uuid);
+                            log::info!("testing_system_side: Recieved a message | submission = {:?}", submission.uuid);
                             tokio::spawn(TestingSystemSide::add_submission(server.clone(), submission));
                         },
                     }
                 },
                 Err(err) => {
-                    log::error!("testing_system_side: Recieved a unparseable message | message = {:?}", err);
+                    log::error!("testing_system_side: Recieved a unparseable message | error = {:?}", err);
                     break 'lp Err("testing system sent wrong message".to_string());
                 }
             }

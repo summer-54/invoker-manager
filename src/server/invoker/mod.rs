@@ -150,7 +150,7 @@ impl Invoker {
                     return Ok(exit_code);
                 },
                 InputMessage::Verdict { verdict, message } => {
-                    log::info!("Working on VERDICT message from invoker | verdict = {:?} | message = {:?}", verdict, message);
+                    log::info!("Working on VERDICT message from invoker | verdict = {:?}", verdict);
                     let Some(submission_uuid) = invoker.lock().await.submission_uuid.clone() else {
                         log::error!("invoker_side: Invoker send VERDICT message, before taking submission");
                         continue 'lp;
@@ -181,7 +181,7 @@ impl Invoker {
                 }
                 InputMessage::TestVerdict { result, test, data } => {
                     {
-                        log::info!("Working on TEST_VERDICT message from invoker | result = {:?} | test = {:?} | data = {:?}", result, test, data);
+                        log::info!("Working on TEST_VERDICT message from invoker | result = {:?} | test = {:?}", result, test);
                         let invoker = invoker.clone();
                         let server = server.clone();
                         let result = result.clone();
@@ -214,7 +214,7 @@ impl Invoker {
                             break 'bl;
                         };
                         let Some(test_result) = tests_results.get_mut(test as usize - 1) else {
-                            log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {} | current map = {:?}", invoker_uuid, test - 1, tests_results.len(), submission_uuid, server_locked.tests_results);
+                            log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {}", invoker_uuid, test - 1, tests_results.len(), submission_uuid);
 
                             break 'bl;
                         };
