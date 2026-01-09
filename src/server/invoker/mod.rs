@@ -90,17 +90,22 @@ impl Invoker {
     }
 
     pub async fn take_submission(invoker: Arc<Mutex<Invoker>>, server: Arc<Mutex<Server>>) -> Result<Option<Uuid>, String> {
-        let mut invoker_locked = invoker.lock().await;
-        log::info!("Invoker tries to take new submission | uuid = {}", invoker_locked.uuid);
-        if let Some(uuid) = invoker_locked.submission_uuid {
-            log::error!("Invoker already has submission and can't take new one | invoker_uuid = {} | submssion = {}", invoker_locked.uuid, uuid);
-            return Err("Invoker already has submission and can't take new one.".to_string());
+        
+        {
+            let invoker_locked = invoker.lock().await;
+            log::info!("Invoker tries to take new submission | uuid = {}", invoker_locked.uuid);
+            if let Some(uuid) = invoker_locked.submission_uuid {
+                log::error!("Invoker already has submission and can't take new one | invoker_uuid = {} | submssion = {}", invoker_locked.uuid, uuid);
+                return Err("Invoker already has submission and can't take new one.".to_string());
+            }
         }
         let submission = {
             let submissions_pool_receiver_cloned = server.lock().await.invokers_side.submissions_pool_receiver.clone();
-            let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
+            let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as an indicator of submissions-routing
             submissions_pool_receiver.recv().await
         };
+        let mut invoker_locked = invoker.lock().await;
+
         if let Some(submission) = submission {
             let submission_uuid = submission.uuid;
             log::info!("Invoker takes new submission | submission_uuid = {}", submission_uuid);
