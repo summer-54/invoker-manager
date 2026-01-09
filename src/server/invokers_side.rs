@@ -85,7 +85,11 @@ impl InvokersSide {
 
             // Need invoker authorisation
             
-            Invoker::authorise(invoker.clone(), server.clone()).await?;
+            if let Err(err) = Invoker::authorise(invoker.clone(), server.clone()).await {
+                let _ = InvokerGateway::send_auth_verdict(invoker, false).await;
+                log::error!("Droped connection to invoker while authorisation: {err:?}");
+                return Err(err);
+            };
 
             {
                 let mut server_locked = server.lock().await;

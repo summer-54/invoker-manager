@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use invoker_auth::{Cert, Parse};
+use invoker_auth::Cert;
 use reqwest::Url;
 use uuid::Uuid;
 use std::str::FromStr;
@@ -81,7 +81,13 @@ impl Gateway { // wrong protocol
         let response = client.execute(request)
             .await.map_err(|e| format!("Can't execute request: {:?}", e))?
             .error_for_status().map_err(|e| format!("Can't do error_for_status: {:?}", e))?;
-        Cert::from_bytes(&response.bytes().await.map_err(|e| format!("Can't get bytes: {:?}", e))?).map_err(|e| format!("Can't get cert from bytes {:?}", e))
+        let bytes = response.bytes().await.map_err(|e| format!("Can't get bytes: {:?}", e))?.to_vec();
+        let string_response = &String::from_utf8(bytes).map_err(
+            |e| format!("Can't create string from utf8 bytes from api response: {e:?}")
+        )?;
+        Cert::from_str(
+            &string_response
+        ).map_err(|e| format!("Can't get cert from string <{string_response}> : {:?}", e))
     }
 }
 

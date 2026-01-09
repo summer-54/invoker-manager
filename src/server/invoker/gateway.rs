@@ -118,8 +118,8 @@ pub enum OutputMessage {
         verdict: bool,
     },
     Challenge(Box<[u8]>),
-    StopTesting,
-    CloseInvoker,
+    _StopTesting,
+    _CloseInvoker,
 }
 
 impl TryFrom<Vec<u8>> for InputMessage {
@@ -213,11 +213,11 @@ impl Into<Vec<u8>> for OutputMessage {
                 result.append(&mut submission.data.clone());
                 result
             },
-            Self::StopTesting => {
+            Self::_StopTesting => {
                 let result = "TYPE STOP\n".as_bytes().to_vec();
                 result
             },
-            Self::CloseInvoker => {
+            Self::_CloseInvoker => {
                 let result = "TYPE CLOSE\n".as_bytes().to_vec();
                 result
             },

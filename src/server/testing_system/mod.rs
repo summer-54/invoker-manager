@@ -1,5 +1,5 @@
 pub mod gateway;
-pub use gateway::{Gateway, InputMessage, OutputMessage};
+pub use gateway::{Gateway, InputMessage};
 
 use std::sync::Arc;
 
