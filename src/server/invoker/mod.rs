@@ -34,17 +34,18 @@ impl Invoker {
 
     pub async fn authorise(invoker: Arc<Mutex<Self>>, server: Arc<Mutex<Server>>) -> Result<String, String> {
         let challenge = Challenge::generate(128, &mut rand::rng());
-        log::trace!("Sending authoriation challenge");
+        log::trace!("Sending authorisation challenge");
 
         Gateway::send_auth_challenge(invoker.clone(), &challenge).await?;
-        log::trace!("Sended authoriation challenge");
+        log::trace!("Sended authorisation challenge");
 
-        let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() else {
-            return Err("Testing system hasn't connected yet".to_string());
-        };
+        let testing_system = server.lock().await.testing_system_side.testing_system.clone();
         // Getting certificate from testing system
-        let cert = testing_system::gateway::Gateway::get_certificate_by_key(testing_system, &invoker.lock().await.key).await?;
-        // let cert = Cert::from_file("pub.key").map_err(|_| "Can't get certificate".to_string())?;
+        let authorisation = server.lock().await.authorisation.clone();
+
+        let cert = authorisation.get_certificate_by_key(&invoker.lock().await.key, testing_system).await?;
+
+
 
         log::trace!("Gotten certificate of {}", invoker.lock().await.key);
 
@@ -96,10 +97,6 @@ impl Invoker {
             return Err("Invoker already has submission and can't take new one.".to_string());
         }
         let submission = {
-            /*let Ok(v) = std::fs::read("problem.tar") else {
-                return Err("LITTLE ERROR".to_string());
-            };
-            Some(Submission::new(uuid::Uuid::from_u128(12313u128), v, 3))*/ 
             let submissions_pool_receiver_cloned = server.lock().await.invokers_side.submissions_pool_receiver.clone();
             let mut submissions_pool_receiver = submissions_pool_receiver_cloned.lock().await; // firstly we'll lock submissions, as a indicator of submissions-routing
             submissions_pool_receiver.recv().await

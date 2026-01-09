@@ -16,6 +16,7 @@ INVOKERS_ADDRESS=0.0.0.0:1111 TS_ADDRESS=0.0.0.0:2222 CP_ADDRESS=0.0.0.0:3333 ./
  - [i] `INVOKERS_ADDRESS` - address of `invoekr-manager` where `invoker` can connnect.
  - [i] `TS_ADDRESS` - address of `testing system` where `invoker-manager` connects.
  - [i] `CP_ADDRESS` - address of `invoker-manager` where `control-panel` is hosting.
+ - [?] `INVOKERS_AUTH_METHOD` : `API` | `FromFile` | `FromFileByName` - can be used to specify method to get pub key for invokers. By default it uses `API`
  - [?] `API_ADDRESS` - can be used to specify API address of `testing system`. By default it uses `<TS_ADDERSS>/api`.
  - [?] `RUST_LOG=trace` - can be used to increase amount of logs. By default it logs only errors.
  - [?] `RUST_BACKTRACE=1` - can be used to show backtrace after painc.

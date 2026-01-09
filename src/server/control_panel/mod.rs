@@ -31,7 +31,7 @@ impl ControlPanel {
     pub async fn start_listening(self) -> Result<String, String> {
         log::trace!("Control panel start listeneing.");
         match axum::serve(self.listener, self.app).await { Ok(()) => Ok("Serving succesfuly ended".to_string()),
-            Err(err) => Err(format!("Occure error: {err:?}.")),
+            Err(err) => Err(format!("Occure error while serving: {err:?}.")),
         }
     }
 }

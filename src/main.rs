@@ -1,7 +1,7 @@
 mod server;
 
-use std::env;
-use server::{Server, invokers_side::InvokersSide, testing_system_side::TestingSystemSide, control_panel::ControlPanel};
+use std::{env, str::FromStr};
+use server::{authorisation::Authorisation, control_panel::ControlPanel, invokers_side::InvokersSide, testing_system_side::TestingSystemSide, Server};
 
 pub const MAX_MESSAGE_SIZE: usize = 1 << 31;
 pub const COMPRESSION_LEVEL: u32 = 9;
@@ -14,8 +14,9 @@ async fn main() {
     let ts_address: String = env::var("TS_ADDRESS").unwrap_or("127.0.0.1:2222".to_string());
     let cp_address: String = env::var("CP_ADDRESS").unwrap_or("127.0.0.1:3333".to_string());
     let api_address: String = env::var("API_ADDRESS").unwrap_or(format!("{ts_address}/api"));
+    let inv_auth_method: String = env::var("INVOKERS_AUTH_METHOD").unwrap_or(format!("API"));
 
-    let server = Server::new();
+    let server = Server::new(Authorisation::from_str(&inv_auth_method).unwrap_or(Authorisation::API));
     log::info!("Server created");
     let inv_side = {
         let server = server.clone();
@@ -39,6 +40,7 @@ async fn main() {
     let control_panel = {
         let server = server.clone();
         tokio::spawn(async move {
+            log::info!("Control panel started");
             let control_panel = match ControlPanel::binded_to(&cp_address, server).await {
                 Ok(cp) => cp,
                 Err(er) => {
