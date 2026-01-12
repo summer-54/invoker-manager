@@ -141,7 +141,7 @@ impl Invoker {
                 return Err("Reading error".to_string());
                 }
             };
-            log::info!("invoker_handler: Recieeved message from invoker. | message = {:?} | invoker_uuid = {:?}", message, invoker_uuid);
+            log::info!("invoker_handler: Recieeved message from invoker | invoker_uuid = {:?}", invoker_uuid);
 
             match message {
                 InputMessage::Exited { exit_code, exit_message } => {
@@ -181,7 +181,7 @@ impl Invoker {
                 }
                 InputMessage::TestVerdict { result, test, data } => {
                     {
-                        log::info!("Working on TEST_VERDICT message from invoker | result = {:?} | test = {:?}", result, test);
+                        log::info!("Working on TEST_VERDICT m.essage from invoker | result = {:?} | test = {:?}", result, test);
                         let invoker = invoker.clone();
                         let server = server.clone();
                         let result = result.clone();
