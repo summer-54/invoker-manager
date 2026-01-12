@@ -40,9 +40,10 @@ async fn get_invokers_status_handler(State(server): State<Arc<Mutex<Server>>>) -
     log::trace!("Recieved GET invokers-status.");
     let invokers_status = server.lock().await.invokers_side.get_invokers_status().await;
     let map: HashMap<String, Option<String>> = invokers_status.iter().map(
-        |(key, val)| 
-        (uuid::fmt::Urn::from_uuid(key.clone()).to_string(), if let Some(id) = val {
-            Some(uuid::fmt::Urn::from_uuid(id.clone()).to_string())
+        |(key, val)| (
+        key.to_string(),
+        if let Some(id) = val {
+            Some(id.to_string())
         } else {
             None
         })
@@ -65,7 +66,7 @@ async fn get_tests_results_handler(State(server): State<Arc<Mutex<Server>>>) -> 
     let tests_results = server.lock().await.tests_results.clone();
     let map: HashMap<String, Vec<TestResult>> = tests_results.iter().map(
         |(key, val)| 
-        (uuid::fmt::Urn::from_uuid(key.clone()).to_string(), val.clone())
+        (key.to_string(), val.clone())
     ).collect();
  
     match serde_json::to_string(&map) {
