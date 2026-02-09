@@ -75,7 +75,7 @@ impl Gateway {
     pub async fn send_auth_challenge(invoker: Arc<Mutex<Invoker>>, challenge: &Challenge) -> Result<(), String> {
         let writer_unlocked = invoker.lock().await.writer.clone();
         let mut writer = writer_unlocked.lock().await;
-        Self::send_message_to(&mut writer, OutputMessage::Challenge(challenge.bytes().clone())).await?;
+        Self::send_message_to(&mut writer, OutputMessage::Challenge(Box::from(&**challenge))).await?;
         Ok(())
     }
 }

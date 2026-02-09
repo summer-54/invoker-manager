@@ -8,7 +8,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use uuid::Uuid;
 pub use gateway::{Gateway, InputMessage, OutputMessage};
 use super::{testing_system, Server, submission::Submission};
-use invoker_auth::{policy, Challenge};
+use invoker_auth::{policy, Challenge, Solution};
 
 pub type WSReader = Receiver<TcpStream, DeflateDecoder>;
 pub type WSWriter = Sender<TcpStream, DeflateEncoder>;
@@ -55,7 +55,7 @@ impl Invoker {
         log::trace!("Recieved signed_challenge message: {:?}", signed_challenge);
 
         if let InputMessage::SignedChallenge { bytes } = signed_challenge {
-            if let Ok(()) = challenge.check_solution(&bytes, &cert, &policy::StandardPolicy::new()) {
+            if let Ok(()) = Solution::from(&*bytes).verify(&challenge, &cert, &policy::StandardPolicy::new()) {
                 Gateway::send_auth_verdict(invoker, true).await?;
                 Ok("Authorisation succeded".to_string())
             } else {
@@ -214,7 +214,7 @@ impl Invoker {
                             break 'bl;
                         };
                         let Some(test_result) = tests_results.get_mut(test as usize - 1) else {
-                            log::error!("invoker_handler: Invoker send test verdict, but current test_result is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {}", invoker_uuid, test - 1, tests_results.len(), submission_uuid);
+                            log::error!("invoker_handler: Invoker send test verdict, but current test_results is to small. | invoker_uuid: {:?} | test number = {} | currently allocated = {} | submission_uuid = {}", invoker_uuid, test - 1, tests_results.len(), submission_uuid);
 
                             break 'bl;
                         };

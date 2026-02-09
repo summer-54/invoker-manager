@@ -12,7 +12,7 @@ use crate::server::{submission::Submission, verdict::{TestResult, Verdict}};
 
 pub struct Gateway;
 
-impl Gateway { // wrong protocol
+impl Gateway {
            
     async fn read_data_from(socket: &mut WSReader) -> Result<Vec<u8>, Error> {
         loop {
