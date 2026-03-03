@@ -226,6 +226,27 @@ impl Invoker {
                 },
                 InputMessage::OpError { message } => {
                     log::warn!("Invoker returned operror | message = {} | uuid = {}", message, invoker_uuid);
+                    
+                    if let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() {
+                        let Some(submission_uuid) = invoker.lock().await.submission_uuid.clone() else {
+                            log::error!("invoker_side: Invoker send OPERROR message, before taking submission");
+                            continue 'lp;
+                        };
+                        let test_results = server.lock().await.tests_results.remove(&submission_uuid).unwrap_or_else(|| {
+                            log::error!("invoker_handler: Undefined test results. | submission_uuid: {:?}", submission_uuid);
+
+                            Vec::new()
+                        });
+
+                        tokio::spawn(testing_system::gateway::Gateway::send_submission_verdict(testing_system, crate::server::verdict::Verdict::TE, submission_uuid, test_results, Err(message)));
+
+                        Self::finish_current_submission(server.clone(), invoker.clone()).await;
+                        match Self::take_submission(invoker.clone(), server.clone()).await {
+                            Ok(Some(uuid)) => log::info!("Invoker taked new submission after operror'ing on previous | uuid = {:?} | submission_uuid = {:?}", invoker_uuid, uuid),
+                            Ok(None) => log::info!("Invoker didn't take new submission after operror'ing previous | uuid = {:?}", invoker_uuid),
+                            Err(error) => log::error!("Invoker couldn't take new submission due to the error | error = {} | uuid = {:?}", error.to_string(), invoker_uuid)
+                        }
+                    }
                 },
                 _ => {}
             }
