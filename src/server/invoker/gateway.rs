@@ -85,6 +85,9 @@ pub enum InputMessage {
     SignedChallenge {
         bytes: Box<[u8]>,
     },
+    LoadPackage {
+        uuid: Uuid,
+    },
     Token {
         uuid: Uuid,
         key: String,
@@ -114,6 +117,9 @@ pub enum OutputMessage {
     TestSubmission {
         submission: Submission,
     },
+    ProblemPackage {
+        package: Box<[u8]>,
+    },
     AuthVerdict {
         verdict: bool,
     },
@@ -125,82 +131,104 @@ pub enum OutputMessage {
 impl TryFrom<Vec<u8>> for InputMessage {
     type Error = String;
     fn try_from(bytes: Vec<u8>) -> Result<Self, String> {
-        let (headers, data) = Gateway::parse_headers(bytes);
+        let (stream, _, bytes) = Gateway::first_line_of_bytes(&bytes);
+        let (headers, data) = Gateway::parse_headers(bytes.to_vec());
         let Some(message_type) = headers.get("TYPE") else {
             log::error!("Message doesn't contain TYPE header");
 
             return Err("Message doesn't contain TYPE header".to_string());
         };
-        match message_type.as_str() {
-            "TOKEN" => {
-                let uuid = Uuid::from_str(headers.get("ID").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
-                let key = headers.get("KEY").map_or("", |s| s).to_string();
-                Ok(InputMessage::Token{
-                    uuid,
-                    key,
-                })
-            },
-            "VERDICT" => {
-                let verdict = Verdict::from(headers.get("NAME").unwrap_or(&"UV".to_string()));
-                if let Verdict::UV = verdict {
-                    log::error!("Readed UV verdict | headers = {:?}", headers);
-                }
-                if let Verdict::OK = verdict {
-                    let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
-                    let points = headers.get("GROUPS").unwrap_or(&"0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
-                    Ok(InputMessage::Verdict {
-                        verdict,
-                        message: Ok((sum, points)),
-                    })
-                } else {
-                    let message = headers.get("MESSAGE").cloned().unwrap_or("Undefined error message".to_string());
-                    Ok(InputMessage::Verdict {
-                        verdict,
-                        message: Err(message),
-                    })
-                }
-            },
-            "TEST" => {
-                let test: u16 = headers.get("ID").map_or(1, |v| u16::from_str(v).unwrap_or(1));
-                let verdict = Verdict::from(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
-                let time: f32 = headers.get("TIME").map_or(0.0, |v| f32::from_str(v).unwrap_or(0.0));
-                let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
-                Ok(InputMessage::TestVerdict {
-                    result: TestResult {
-                        verdict,
-                        time,
-                        memory,
+        match stream.as_str() {
+            "master" => {
+                match message_type.as_str() {
+                    "VERDICT" => {
+                        let verdict = Verdict::from(headers.get("NAME").unwrap_or(&"UV".to_string()));
+                        if let Verdict::UV = verdict {
+                            log::error!("Readed UV verdict | headers = {:?}", headers);
+                        }
+                        if let Verdict::OK = verdict {
+                            let sum = u8::from_str(headers.get("SUM").map_or("0", |v| v)).unwrap_or(0);
+                            let points = headers.get("GROUPS").unwrap_or(&"0".to_string()).split(" ").map(|string| u8::from_str(string).unwrap_or(0)).collect();
+                            Ok(InputMessage::Verdict {
+                                verdict,
+                                message: Ok((sum, points)),
+                            })
+                        } else {
+                            let message = headers.get("MESSAGE").cloned().unwrap_or("Undefined error message".to_string());
+                            Ok(InputMessage::Verdict {
+                                verdict,
+                                message: Err(message),
+                            })
+                        }
                     },
-                    test,
-                    data,
-                })
+                    "TEST" => {
+                        let test: u16 = headers.get("ID").map_or(1, |v| u16::from_str(v).unwrap_or(1));
+                        let verdict = Verdict::from(headers.get("VERDICT").unwrap_or(&"UV".to_string()));
+                        let time: f32 = headers.get("TIME").map_or(0.0, |v| f32::from_str(v).unwrap_or(0.0));
+                        let memory: u32 = headers.get("MEMORY").map_or(0, |v| u32::from_str(v).unwrap_or(0));
+                        Ok(InputMessage::TestVerdict {
+                            result: TestResult {
+                                verdict,
+                                time,
+                                memory,
+                            },
+                            test,
+                            data,
+                        })
+                    },
+                    "EXITED" => {
+                        let exit_code = headers.get("CODE").cloned().unwrap_or("0".to_string());
+                        let exit_message = headers.get("MESSAGE").cloned().unwrap_or("0".to_string());
+                        Ok(InputMessage::Exited{
+                            exit_code,
+                            exit_message,
+                        })
+                    },
+                    "ERROR" => {
+                        let error = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
+                        Ok(InputMessage::Error{
+                            message: error
+                        })
+                    },
+                    "OPERROR" => {
+                        let operror = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
+                        Ok(InputMessage::OpError{
+                            message: operror
+                        })
+                    },
+                    &_ => Err("Can't parse message".to_string())
+                }
             },
-            "EXITED" => {
-                let exit_code = headers.get("CODE").cloned().unwrap_or("0".to_string());
-                let exit_message = headers.get("MESSAGE").cloned().unwrap_or("0".to_string());
-                Ok(InputMessage::Exited{
-                    exit_code,
-                    exit_message,
-                })
+            "auth" => {
+                match message_type.as_str() {
+                    "TOKEN" => {
+                        let uuid = Uuid::from_str(headers.get("ID").map_or("", |s| s)).unwrap_or(Uuid::from_bytes(rand::random::<[u8; 16]>()));
+                        let key = headers.get("KEY").map_or("", |s| s).to_string();
+                        Ok(InputMessage::Token{
+                            uuid,
+                            key,
+                        })
+                    },
+                    "AUTH" => {
+                        Ok(InputMessage::SignedChallenge{
+                            bytes: data.into(),
+                        })
+                    },
+                    &_ => Err("Can't parse message".to_string())
+                }
             },
-            "ERROR" => {
-                let error = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
-                Ok(InputMessage::Error{
-                    message: error
-                })
-            },
-            "OPERROR" => {
-                let operror = headers.get("MESSAGE").cloned().unwrap_or("".to_string());
-                Ok(InputMessage::OpError{
-                    message: operror
-                })
-            },
-            "AUTH" => {
-                Ok(InputMessage::SignedChallenge{
-                    bytes: data.into(),
-                })
-            },
-            &_ => Err("Can't parse message".to_string())
+            "load" => {
+                match message_type.as_str() {
+                    "LOAD" => {
+                        let uuid = Uuid::from_str(headers.get("PACKAGE").map_or("0", |s| s)).unwrap_or(Uuid::from_u128(0));
+                        Ok(InputMessage::LoadPackage {
+                            uuid
+                        })
+                    },
+                    &_ => Err("Can't parse message".to_string())
+                }
+            }
+            _ => {Err("Unknown stream name".to_string())},
         }
     }
 }
@@ -209,25 +237,30 @@ impl Into<Vec<u8>> for OutputMessage {
     fn into(self) -> Vec<u8> {
         match self {
             Self::TestSubmission { submission } => {
-                let mut result = "TYPE START\nDATA\n".as_bytes().to_vec();
+                let mut result = format!("master\nTYPE START\nPACKAGE {}\nLANG {}\nDATA\n", submission.package_uuid.to_u128_le(), submission.language).as_bytes().to_vec();
                 result.append(&mut submission.data.clone());
                 result
             },
             Self::_StopTesting => {
-                let result = "TYPE STOP\n".as_bytes().to_vec();
+                let result = "master\nTYPE STOP\n".as_bytes().to_vec();
                 result
             },
             Self::_CloseInvoker => {
-                let result = "TYPE CLOSE\n".as_bytes().to_vec();
+                let result = "master\nTYPE CLOSE\n".as_bytes().to_vec();
+                result
+            },
+            Self::ProblemPackage { package } => {
+                let mut result = "load\nTYPE PACKAGE\nDATA\n".as_bytes().to_vec();
+                result.append(&mut package.to_vec());
                 result
             },
             Self::Challenge ( bytes ) => {
-                let mut result = "TYPE AUTH_CHALLENGE\nDATA\n".as_bytes().to_vec();
+                let mut result = "auth\nTYPE AUTH_CHALLENGE\nDATA\n".as_bytes().to_vec();
                 result.append(&mut bytes.to_vec());
                 result
             },
             Self::AuthVerdict { verdict } => {
-                let result = format!("TYPE AUTH_VERDICT\nVERDICT {}\n", {
+                let result = format!("auth\nAUTH_VERDICT\nVERDICT {}\n", {
                     if verdict == true {
                         "APPROVED"
                     } else {

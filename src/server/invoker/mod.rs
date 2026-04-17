@@ -83,7 +83,9 @@ impl Invoker {
         let writer = invoker_locked.writer.clone();
         tokio::spawn(async move {
             let mut writer_locked = writer.lock().await;
-            if let Err(err) = Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{submission}).await {
+            if let Err(err) = Gateway::send_message_to(&mut writer_locked, OutputMessage::TestSubmission{
+                submission
+            }).await {
                 log::error!("Couldn't send TestSubmission message to invoker | error = {}", err);
             };
         });
@@ -144,6 +146,34 @@ impl Invoker {
             log::info!("invoker_handler: Recieeved message from invoker | invoker_uuid = {:?}", invoker_uuid);
 
             match message {
+                InputMessage::LoadPackage { uuid } => {
+                    log::info!("Working on LOAD_PACKAGE message from invoker | uuifind elemtd = {:?}", uuid);
+                    
+                    let invoker = invoker.clone();
+                    let server = server.clone();
+                    tokio::spawn(async move {
+                        let Some(testing_system) = server.lock().await.testing_system_side.testing_system.clone() else {
+                            log::error!("Testing system hasn't connect but already requested package");
+
+                            return;
+                        };
+                        let Ok(package) = testing_system::gateway::Gateway::get_problem_package_by_uuid(testing_system.clone(), &uuid).await else {
+                            log::error!("Can't get problem package");
+
+                            return;
+                        };
+                        let writer = invoker.lock().await.writer.clone();
+                        let mut writer_locked = writer.lock().await;
+                        Gateway::send_message_to(&mut writer_locked, OutputMessage::ProblemPackage{
+                            package: package.into(),
+                        }).await;
+                        match Self::take_submission(invoker.clone(), server.clone()).await {
+                            Ok(Some(uuid)) => log::info!("Invoker taked new submission after completing previous | uuid = {:?} | submission_uuid = {:?}", invoker_uuid, uuid),
+                            Ok(None) => log::info!("Invoker didn't take new submission after completing previous | uuid = {:?}", invoker_uuid),
+                            Err(error) => log::error!("Invoker couldn't take new submission due to the error | error = {} | uuid = {:?}", error.to_string(), invoker_uuid)
+                        }
+                    });
+                }
                 InputMessage::Exited { exit_code, exit_message } => {
                     log::info!("Recieved an exit message | code = {} | message = {}", exit_code, exit_message);
 
@@ -178,7 +208,7 @@ impl Invoker {
                             Err(error) => log::error!("Invoker couldn't take new submission due to the error | error = {} | uuid = {:?}", error.to_string(), invoker_uuid)
                         }
                     });
-                }
+                },
                 InputMessage::TestVerdict { result, test, data } => {
                     {
                         log::info!("Working on TEST_VERDICT m.essage from invoker | result = {:?} | test = {:?}", result, test);

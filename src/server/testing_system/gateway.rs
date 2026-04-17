@@ -72,6 +72,19 @@ impl Gateway {
         }
     }
     
+    pub async fn get_problem_package_by_uuid(testing_system: Arc<Mutex<TestingSystem>>, uuid: &Uuid) -> Result<Vec<u8>, String> {
+        log::trace!("Trying to get authorise key from api");
+        let api_address = testing_system.lock().await.api_address.clone();
+        let mut request = reqwest::Request::new(reqwest::Method::GET, Url::from_str(&format!("http://{api_address}/get_problem_package")).map_err(|e| e.to_string())?);
+        let _ = request.headers_mut().insert("Authorization", HeaderValue::from_str(&uuid.to_string()).map_err(|e| format!("Can't create header from str: {:?}", e))?);
+        let client = reqwest::Client::new();
+        let response = client.execute(request)
+            .await.map_err(|e| format!("Can't execute request: {:?}", e))?
+            .error_for_status().map_err(|e| format!("Can't do error_for_status: {:?}", e))?;
+        let bytes = response.bytes().await.map_err(|e| format!("Can't get bytes: {:?}", e))?.to_vec();
+        Ok(bytes)
+    }
+    
     pub async fn get_certificate_by_key(testing_system: Arc<Mutex<TestingSystem>>, key: &String) -> Result<Cert, String> {
         log::trace!("Trying to get authorise key from api");
         let api_address = testing_system.lock().await.api_address.clone();
@@ -119,7 +132,7 @@ impl TryFrom<Vec<u8>> for InputMessage {
         let test_count = u16::from_be_bytes(bytes[16..18].try_into().unwrap_or([0u8; 2]));
         let data = bytes[18..].to_vec();
         Ok(Self::SubmissionRun {
-            submission: Submission::new(uuid, data, test_count),
+            submission: Submission::new(uuid, data, test_count, language, package_uuid),
         })
     }
 }
